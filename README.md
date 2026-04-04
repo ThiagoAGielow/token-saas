@@ -73,7 +73,7 @@ No more juggling multiple subscriptions. No more paying for AI you don't use.
 
 ```bash
 # Clone the repo
-git clone https://github.com/YOUR_USERNAME/tokenflow.git
+git clone https://github.com/ThiagoAGielow/token-saas.git
 cd tokenflow
 
 # Install dependencies
