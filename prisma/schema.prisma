@@ -1,0 +1,287 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Prisma Schema — Token SaaS Platform
+// Provider: PostgreSQL
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum TransactionType {
+  PURCHASE
+  SPEND
+  REFUND
+  REFERRAL_BONUS
+  TRIAL_GRANT
+  ROLLOVER
+  EXPIRY
+}
+
+enum GrantSource {
+  MONTHLY_PLAN
+  TOPUP_PACK
+  REFERRAL
+  TRIAL
+}
+
+enum SubscriptionPlan {
+  STARTER
+  GROWTH
+}
+
+enum WebsiteStatus {
+  BUILDING
+  ACTIVE
+  PAUSED
+}
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  clerkId      String   @unique
+  email        String   @unique
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  /// Unique referral code auto-generated on signup (e.g. "THIAGO42")
+  referralCode String   @unique
+
+  /// The userId of the person who referred this user (nullable)
+  referredBy   String?
+  referrer     User?    @relation("Referrals", fields: [referredBy], references: [id])
+  referrals    User[]   @relation("Referrals")
+
+  // Relations
+  wallet            TokenWallet?
+  apiKeys           ApiKey[]
+  websites          Website[]
+  domains           Domain[]
+  emailAccounts     EmailAccount[]
+  transactions      TokenTransaction[]
+  grants            TokenGrant[]
+  subscription      Subscription?
+
+  @@index([clerkId])
+  @@index([referralCode])
+  @@index([referredBy])
+}
+
+// ─── Token Wallet ─────────────────────────────────────────────────────────────
+
+model TokenWallet {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Current spendable balance
+  balance        Int      @default(0)
+
+  /// Total tokens ever credited (all time)
+  lifetimeEarned Int      @default(0)
+
+  /// Total tokens ever spent (all time)
+  lifetimeSpent  Int      @default(0)
+
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// ─── Token Transaction ────────────────────────────────────────────────────────
+
+model TokenTransaction {
+  id           String          @id @default(cuid())
+  userId       String
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type         TransactionType
+
+  /// Positive = credit, Negative = debit
+  amount       Int
+
+  /// Wallet balance immediately after this transaction
+  balanceAfter Int
+
+  description  String
+  metadata     Json            @default("{}")
+
+  /// Non-null for tokens that expire (monthly plan grants)
+  expiresAt    DateTime?
+
+  createdAt    DateTime        @default(now())
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@index([userId, type])
+  @@index([expiresAt])
+}
+
+// ─── Token Grant ──────────────────────────────────────────────────────────────
+
+/// Tracks individual token grant pools for correct expiry and rollover logic.
+/// Each Stripe purchase / referral / trial creates one TokenGrant.
+model TokenGrant {
+  id        String      @id @default(cuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  amount    Int
+  source    GrantSource
+
+  /// Null = never expires (top-up packs, referral bonuses)
+  expiresAt DateTime?
+
+  /// How many tokens from this grant are still available
+  remaining Int
+
+  createdAt DateTime    @default(now())
+
+  @@index([userId])
+  @@index([userId, expiresAt])
+  @@index([userId, source])
+}
+
+// ─── Subscription ─────────────────────────────────────────────────────────────
+
+model Subscription {
+  id                   String           @id @default(cuid())
+  userId               String           @unique
+  user                 User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  stripeSubscriptionId String           @unique
+  stripePriceId        String
+
+  plan                 SubscriptionPlan
+  status               String           // 'active' | 'canceled' | 'past_due' | 'trialing'
+
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+
+  /// Number of tokens granted per billing cycle for this plan
+  monthlyTokens        Int
+
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@index([userId])
+  @@index([stripeSubscriptionId])
+  @@index([status])
+}
+
+// ─── API Key ──────────────────────────────────────────────────────────────────
+
+model ApiKey {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The key ID stored in Unkey (not the raw secret)
+  unkeyKeyId   String    @unique
+
+  name         String
+  prefix       String
+
+  lastUsedAt   DateTime?
+  requestCount Int       @default(0)
+  isActive     Boolean   @default(true)
+
+  /// Requests per minute rate limit enforced by Unkey
+  rateLimit    Int       @default(100)
+
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+  @@index([unkeyKeyId])
+  @@index([userId, isActive])
+}
+
+// ─── Website ──────────────────────────────────────────────────────────────────
+
+model Website {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name          String
+  subdomain     String        @unique
+  status        WebsiteStatus @default(BUILDING)
+
+  /// User-supplied description / prompt for AI generation
+  prompt        String
+
+  /// Full HTML output from AI generation (stored as Text)
+  generatedHtml String?       @db.Text
+
+  /// Token cost to create this website
+  tokenCost     Int           @default(50)
+
+  publishedAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  domain        Domain?
+
+  @@index([userId])
+  @@index([subdomain])
+  @@index([userId, status])
+}
+
+// ─── Domain ───────────────────────────────────────────────────────────────────
+
+model Domain {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Optional link to the website this domain is pointed at
+  websiteId    String?   @unique
+  website      Website?  @relation(fields: [websiteId], references: [id])
+
+  domain       String    @unique
+  verified     Boolean   @default(false)
+
+  /// Cloudflare DNS record ID for cleanup
+  cfRecordId   String?
+
+  tokenCost    Int       @default(20)
+  verifiedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  emailAccounts EmailAccount[]
+
+  @@index([userId])
+  @@index([domain])
+  @@index([userId, verified])
+}
+
+// ─── Email Account ────────────────────────────────────────────────────────────
+
+model EmailAccount {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  domainId       String
+  domain         Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  address        String   @unique
+
+  /// Zoho Mail account identifier for API calls
+  zohoAccountId  String?
+
+  tokenCost      Int      @default(10)
+  createdAt      DateTime @default(now())
+
+  @@index([userId])
+  @@index([domainId])
+  @@index([address])
+}
