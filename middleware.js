@@ -30,15 +30,17 @@ export default clerkMiddleware(async (auth, request) => {
   const platformDomain = process.env.PLATFORM_DOMAIN || 'velocitysites.com.au'
 
   // Detect subdomain requests (e.g. myshop.velocitysites.com.au)
-  // and rewrite them to the internal /site/[subdomain] route
-  if (
-    hostname.endsWith(`.${platformDomain}`) &&
-    !hostname.startsWith('www.')
-  ) {
+  // and rewrite them to the internal /site/[subdomain] route.
+  // Reserved subdomains that run the app itself are excluded.
+  const RESERVED_SUBDOMAINS = new Set(['www', 'app', 'api', 'dashboard', 'admin'])
+
+  if (hostname.endsWith(`.${platformDomain}`)) {
     const subdomain = hostname.replace(`.${platformDomain}`, '')
-    const url = request.nextUrl.clone()
-    url.pathname = `/site/${subdomain}`
-    return NextResponse.rewrite(url)
+    if (!RESERVED_SUBDOMAINS.has(subdomain)) {
+      const url = request.nextUrl.clone()
+      url.pathname = `/site/${subdomain}`
+      return NextResponse.rewrite(url)
+    }
   }
 
   if (!isPublicRoute(request)) {
