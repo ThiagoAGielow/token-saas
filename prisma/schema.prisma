@@ -63,6 +63,7 @@ model User {
   // Relations
   wallet            TokenWallet?
   apiKeys           ApiKey[]
+  aiKeys            UserAiKey[]
   websites          Website[]
   domains           Domain[]
   emailAccounts     EmailAccount[]
@@ -261,6 +262,31 @@ model Domain {
   @@index([userId])
   @@index([domain])
   @@index([userId, verified])
+}
+
+// ─── User AI Key ──────────────────────────────────────────────────────────────
+
+/// Stores encrypted AI provider keys that customers bring (BYOK).
+/// One record per provider per user. The raw key is never returned by the API.
+model UserAiKey {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// 'claude' | 'openai' | 'gemini'
+  provider     String
+
+  /// AES-256-GCM encrypted API key
+  encryptedKey String
+
+  /// Last 4 characters of the original key — shown to the user for identification
+  keyHint      String
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, provider])
+  @@index([userId])
 }
 
 // ─── Email Account ────────────────────────────────────────────────────────────
