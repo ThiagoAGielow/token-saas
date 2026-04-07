@@ -57,13 +57,13 @@ function Nav() {
           {/* CTA group */}
           <div className="hidden md:flex items-center gap-3">
             <a
-              href="#"
+              href="/sign-in"
               className="text-sm text-slate-400 hover:text-white transition-colors px-3 py-1.5"
             >
               Sign in
             </a>
             <a
-              href="#"
+              href="/sign-up"
               className="text-sm font-semibold bg-sky-500 hover:bg-sky-400 text-white px-4 py-2 rounded-lg transition-colors shadow-lg shadow-sky-500/20"
             >
               Get started free →
@@ -97,11 +97,11 @@ function Nav() {
             </a>
           ))}
           <div className="pt-2 border-t border-white/5 flex flex-col gap-2">
-            <a href="#" className="text-sm text-slate-400 hover:text-white py-1">
+            <a href="/sign-in" className="text-sm text-slate-400 hover:text-white py-1">
               Sign in
             </a>
             <a
-              href="#"
+              href="/sign-up"
               className="text-sm font-semibold bg-sky-500 text-white px-4 py-2 rounded-lg text-center"
             >
               Get started free →
@@ -204,7 +204,7 @@ function Hero() {
         {/* CTAs */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <a
-            href="#"
+            href="/sign-up"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-sky-500 hover:bg-sky-400 text-white font-bold text-base px-8 py-4 rounded-xl shadow-2xl shadow-sky-500/30 transition-all hover:scale-105 hover:shadow-sky-400/40"
           >
             🎁 Start free — 100 tokens
@@ -433,7 +433,7 @@ function PricingCard({ plan, price, period, tokens, features, cta, highlight, ba
       </ul>
 
       <a
-        href="#"
+        href="/sign-up"
         className={cn(
           'block text-center font-semibold text-sm py-3 rounded-xl transition-all',
           highlight
@@ -550,7 +550,7 @@ function Pricing() {
                 <div className="text-amber-300 font-semibold text-sm">🪙 {label}</div>
                 <div className="text-slate-500 text-xs">{per}</div>
                 <a
-                  href="#"
+                  href="/sign-up"
                   className="w-full mt-1 bg-white/5 hover:bg-sky-500 hover:text-white border border-white/10 hover:border-sky-500 text-slate-300 text-sm font-semibold py-2 rounded-lg transition-all"
                 >
                   Buy now →
@@ -657,7 +657,7 @@ function ReferralBanner() {
                 tokenflow.io/r/your-code
               </div>
               <a
-                href="#"
+                href="/sign-up"
                 className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-6 py-3 rounded-xl transition-all hover:scale-105 shadow-lg shadow-amber-500/30 text-sm"
               >
                 Get my referral link →
@@ -767,7 +767,7 @@ function FinalCTA() {
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <a
-            href="#"
+            href="/sign-up"
             className="inline-flex items-center gap-2 bg-sky-500 hover:bg-sky-400 text-white font-bold text-base px-10 py-4 rounded-xl shadow-2xl shadow-sky-500/30 transition-all hover:scale-105"
           >
             🎁 Get 100 free tokens
