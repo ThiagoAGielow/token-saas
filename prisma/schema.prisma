@@ -248,8 +248,11 @@ model Domain {
   websiteId    String?   @unique
   website      Website?  @relation(fields: [websiteId], references: [id])
 
-  domain       String    @unique
-  verified     Boolean   @default(false)
+  domain            String    @unique
+  verified          Boolean   @default(false)
+
+  /// Random token the user must add as a TXT record to prove domain ownership
+  verificationToken String?
 
   /// Cloudflare DNS record ID for cleanup
   cfRecordId   String?
