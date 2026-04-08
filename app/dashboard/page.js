@@ -15,27 +15,69 @@ const MOCK_DATA = {
   avgDailyUsage: 32,
 };
 
+// ─── SVG Icons ────────────────────────────────────────────────────────────────
+
+function IconCoin({ className = 'w-5 h-5' }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+function IconGlobe({ className = 'w-5 h-5' }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+    </svg>
+  );
+}
+
+function IconLink({ className = 'w-5 h-5' }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+    </svg>
+  );
+}
+
+function IconMail({ className = 'w-5 h-5' }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+    </svg>
+  );
+}
+
+function IconSparkle({ className = 'w-5 h-5' }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5 3l1.5 3.5L10 8l-3.5 1.5L5 13l-1.5-3.5L0 8l3.5-1.5L5 3zm14 11l1 2.5L22.5 17l-2.5 1L19 20.5l-1-2.5L15.5 17l2.5-1L19 14zm-7-9l.75 1.75L14.5 7.5l-1.75.75L12 10l-.75-1.75L9.5 7.5l1.75-.75L12 5z" />
+    </svg>
+  );
+}
+
 const ACTION_COSTS = [
-  { label: 'Create a Website', cost: 50, icon: '🌐' },
-  { label: 'Connect a Domain', cost: 20, icon: '🔗' },
-  { label: 'Set Up an Email', cost: 10, icon: '✉️' },
-  { label: 'AI Content Rewrite', cost: 3, icon: '✨' },
+  { label: 'Create a Website', cost: 50, icon: <IconGlobe /> },
+  { label: 'Connect a Domain', cost: 20, icon: <IconLink /> },
+  { label: 'Set Up an Email', cost: 10, icon: <IconMail /> },
+  { label: 'AI Content Rewrite', cost: 3, icon: <IconSparkle /> },
 ];
 
 // TODO: replace with real activity feed from API
 const MOCK_ACTIVITY = [
-  { id: 1, action: 'Website created', detail: 'myshop.tokenflow.app', tokens: -50, balance: 650, time: '2 hours ago', icon: '🌐' },
-  { id: 2, action: 'AI Rewrite', detail: 'Homepage hero text', tokens: -3, balance: 700, time: '5 hours ago', icon: '✨' },
-  { id: 3, action: 'Email account setup', detail: 'hello@myshop.com', tokens: -10, balance: 703, time: '1 day ago', icon: '✉️' },
-  { id: 4, action: 'Domain connected', detail: 'myshop.com', tokens: -20, balance: 713, time: '1 day ago', icon: '🔗' },
-  { id: 5, action: 'Token top-up', detail: '$25 pack — 1500 tokens', tokens: +1500, balance: 733, time: '3 days ago', icon: '💰' },
+  { id: 1, action: 'Website created', detail: 'myshop.tokenflow.app', tokens: -50, balance: 650, time: '2 hours ago', icon: <IconGlobe />, color: 'text-blue-400' },
+  { id: 2, action: 'AI Rewrite', detail: 'Homepage hero text', tokens: -3, balance: 700, time: '5 hours ago', icon: <IconSparkle />, color: 'text-pink-400' },
+  { id: 3, action: 'Email account setup', detail: 'hello@myshop.com', tokens: -10, balance: 703, time: '1 day ago', icon: <IconMail />, color: 'text-green-400' },
+  { id: 4, action: 'Domain connected', detail: 'myshop.com', tokens: -20, balance: 713, time: '1 day ago', icon: <IconLink />, color: 'text-purple-400' },
+  { id: 5, action: 'Token top-up', detail: '$25 pack — 1500 tokens', tokens: +1500, balance: 733, time: '3 days ago', icon: <IconCoin />, color: 'text-amber-400' },
 ];
 
 function StatCard({ title, value, subtitle, icon, accent, href }) {
   const content = (
     <div className={`p-5 rounded-xl bg-[#111] border border-white/10 hover:border-white/20 transition-all duration-200 group ${href ? 'cursor-pointer' : ''}`}>
       <div className="flex items-start justify-between mb-4">
-        <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl ${accent}`}>
+        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${accent}`}>
           {icon}
         </div>
         {href && (
@@ -61,7 +103,6 @@ export default function DashboardPage() {
   const percentUsed = Math.round((tokensUsedThisMonth / monthlyAllowance) * 100);
   const canAfford = tokenBalance >= selectedAction.cost;
 
-  // Get hour for greeting
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
@@ -71,7 +112,7 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-white">
-            {greeting}, {user.name} 👋
+            {greeting}, {user.name}
           </h2>
           <p className="text-gray-400 mt-1 text-sm">
             Here&apos;s what&apos;s happening with your account today.
@@ -92,7 +133,7 @@ export default function DashboardPage() {
           title="Token Balance"
           value={tokenBalance.toLocaleString()}
           subtitle="tokens remaining"
-          icon="🪙"
+          icon={<IconCoin className="w-5 h-5 text-amber-400" />}
           accent="bg-amber-400/10"
           href="/dashboard/tokens"
         />
@@ -100,7 +141,7 @@ export default function DashboardPage() {
           title="Websites Created"
           value={MOCK_DATA.websitesCreated}
           subtitle="active sites"
-          icon="🌐"
+          icon={<IconGlobe className="w-5 h-5 text-blue-400" />}
           accent="bg-blue-500/10"
           href="/dashboard/websites"
         />
@@ -108,7 +149,7 @@ export default function DashboardPage() {
           title="Domains Connected"
           value={MOCK_DATA.domainsConnected}
           subtitle="verified domains"
-          icon="🔗"
+          icon={<IconLink className="w-5 h-5 text-purple-400" />}
           accent="bg-purple-500/10"
           href="/dashboard/domains"
         />
@@ -116,7 +157,7 @@ export default function DashboardPage() {
           title="Emails Active"
           value={MOCK_DATA.emailsActive}
           subtitle="mailboxes"
-          icon="✉️"
+          icon={<IconMail className="w-5 h-5 text-green-400" />}
           accent="bg-green-500/10"
           href="/dashboard/emails"
         />
@@ -141,13 +182,9 @@ export default function DashboardPage() {
 
           {/* Segmented usage bar */}
           <div className="w-full h-3 bg-white/5 rounded-full overflow-hidden mb-3 flex">
-            {/* Websites portion */}
             <div className="h-full bg-blue-500" style={{ width: '18%' }} title="Websites: 360 tokens" />
-            {/* Domains portion */}
             <div className="h-full bg-purple-500 ml-0.5" style={{ width: '3%' }} title="Domains: 60 tokens" />
-            {/* Emails portion */}
             <div className="h-full bg-green-500 ml-0.5" style={{ width: '4%' }} title="Emails: 80 tokens" />
-            {/* AI rewrites portion */}
             <div className="h-full bg-pink-500 ml-0.5" style={{ width: '43%' }} title="AI Rewrites: 850 tokens" />
           </div>
 
@@ -158,7 +195,6 @@ export default function DashboardPage() {
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-pink-500 inline-block" />AI (850)</span>
           </div>
 
-          {/* Remaining */}
           <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
             <span className="text-sm text-gray-400">{tokenBalance.toLocaleString()} tokens remaining this month</span>
             <span className="text-xs text-gray-500">Resets in 12 days</span>
@@ -182,7 +218,7 @@ export default function DashboardPage() {
                 }`}
               >
                 <span className="flex items-center gap-2">
-                  <span>{action.icon}</span>
+                  <span className={selectedAction.label === action.label ? 'text-blue-400' : 'text-gray-500'}>{action.icon}</span>
                   <span>{action.label}</span>
                 </span>
                 <span className={`font-bold tabular-nums ${selectedAction.label === action.label ? 'text-amber-400' : 'text-gray-500'}`}>
@@ -224,7 +260,7 @@ export default function DashboardPage() {
           <div className="space-y-1">
             {MOCK_ACTIVITY.map((item, i) => (
               <div key={item.id} className={`flex items-center gap-3 py-3 ${i < MOCK_ACTIVITY.length - 1 ? 'border-b border-white/5' : ''}`}>
-                <div className="w-8 h-8 rounded-lg bg-[#1a1a1a] flex items-center justify-center text-sm flex-shrink-0">
+                <div className={`w-8 h-8 rounded-lg bg-[#1a1a1a] flex items-center justify-center flex-shrink-0 ${item.color}`}>
                   {item.icon}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -251,8 +287,8 @@ export default function DashboardPage() {
               href="/dashboard/websites"
               className="flex items-center gap-3 p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 hover:border-blue-500/30 transition-all group"
             >
-              <div className="w-9 h-9 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 text-lg flex-shrink-0 group-hover:bg-blue-500/30 transition-colors">
-                🌐
+              <div className="w-9 h-9 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 flex-shrink-0 group-hover:bg-blue-500/30 transition-colors">
+                <IconGlobe className="w-4 h-4" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-white">Create Website</p>
@@ -267,8 +303,8 @@ export default function DashboardPage() {
               href="/dashboard/domains"
               className="flex items-center gap-3 p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20 hover:border-purple-500/30 transition-all group"
             >
-              <div className="w-9 h-9 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400 text-lg flex-shrink-0 group-hover:bg-purple-500/30 transition-colors">
-                🔗
+              <div className="w-9 h-9 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400 flex-shrink-0 group-hover:bg-purple-500/30 transition-colors">
+                <IconLink className="w-4 h-4" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-white">Add Domain</p>
@@ -283,8 +319,8 @@ export default function DashboardPage() {
               href="/dashboard/emails"
               className="flex items-center gap-3 p-3.5 rounded-xl bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 hover:border-green-500/30 transition-all group"
             >
-              <div className="w-9 h-9 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 text-lg flex-shrink-0 group-hover:bg-green-500/30 transition-colors">
-                ✉️
+              <div className="w-9 h-9 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 flex-shrink-0 group-hover:bg-green-500/30 transition-colors">
+                <IconMail className="w-4 h-4" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-white">Set Up Email</p>
@@ -300,7 +336,8 @@ export default function DashboardPage() {
                 href="/dashboard/tokens"
                 className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-amber-400/10 border border-amber-400/20 hover:bg-amber-400/15 hover:border-amber-400/30 text-amber-400 text-sm font-semibold transition-all"
               >
-                🪙 Top Up Tokens
+                <IconCoin className="w-4 h-4" />
+                Top Up Tokens
               </Link>
             </div>
           </div>
