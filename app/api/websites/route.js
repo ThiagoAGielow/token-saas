@@ -9,18 +9,14 @@ export const dynamic = 'force-dynamic'
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { getOrCreateUser } from '@/lib/user'
 
 export async function GET() {
   try {
     const { userId: clerkId } = await auth()
     if (!clerkId) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
-    const user = await prisma.user.findUnique({
-      where:  { clerkId },
-      select: { id: true },
-    })
-
-    if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    const user = await getOrCreateUser(clerkId)
 
     const websites = await prisma.website.findMany({
       where:   { userId: user.id },

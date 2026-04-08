@@ -16,6 +16,7 @@ export const dynamic = 'force-dynamic'
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { getOrCreateUser } from '@/lib/user'
 import { createCheckoutSession, resolveTokensFromPriceId } from '@/lib/stripe'
 
 /**
@@ -62,19 +63,8 @@ export async function POST(request) {
     }
 
     // ── Resolve internal user ──────────────────────────────────────────────
-    const [user, clerkUser] = await Promise.all([
-      prisma.user.findUnique({
-        where:  { clerkId },
-        select: { id: true, email: true },
-      }),
-      currentUser(),
-    ])
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
-    const email = user.email ?? clerkUser?.emailAddresses?.[0]?.emailAddress ?? ''
+    const user = await getOrCreateUser(clerkId)
+    const email = user.email ?? ''
 
     // ── Create Stripe session ──────────────────────────────────────────────
     const session = await createCheckoutSession(user.id, priceId, mode, email)

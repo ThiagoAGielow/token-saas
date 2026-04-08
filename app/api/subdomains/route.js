@@ -11,6 +11,7 @@ export const dynamic = 'force-dynamic'
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { getOrCreateUser } from '@/lib/user'
 import { spendTokens, TOKEN_COSTS } from '@/lib/tokens'
 
 // Reserved subdomains that can't be claimed by customers
@@ -24,7 +25,7 @@ const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/
 async function getInternalUser() {
   const { userId: clerkId } = await auth()
   if (!clerkId) return null
-  return prisma.user.findUnique({ where: { clerkId }, select: { id: true } })
+  return getOrCreateUser(clerkId)
 }
 
 // ─── GET /api/subdomains?name=myshop ─────────────────────────────────────────

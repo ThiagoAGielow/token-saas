@@ -11,6 +11,7 @@ export const dynamic = 'force-dynamic'
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { getOrCreateUser } from '@/lib/user'
 import { encrypt } from '@/lib/encryption'
 
 const VALID_PROVIDERS = ['claude', 'openai', 'gemini']
@@ -20,11 +21,7 @@ const VALID_PROVIDERS = ['claude', 'openai', 'gemini']
 async function getInternalUser() {
   const { userId: clerkId } = await auth()
   if (!clerkId) return null
-
-  return prisma.user.findUnique({
-    where:  { clerkId },
-    select: { id: true },
-  })
+  return getOrCreateUser(clerkId)
 }
 
 // ─── GET /api/ai-keys ─────────────────────────────────────────────────────────

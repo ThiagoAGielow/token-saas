@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic'
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { getOrCreateUser } from '@/lib/user'
 import {
   getWallet,
   spendTokens,
@@ -31,14 +32,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
 
-    const user = await prisma.user.findUnique({
-      where: { clerkId },
-      select: { id: true },
-    })
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
+    const user = await getOrCreateUser(clerkId)
 
     const [wallet, transactions, grants, daysRemaining] = await Promise.all([
       getWallet(user.id),
