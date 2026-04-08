@@ -5,8 +5,7 @@
 // Uses raw body + Stripe-Signature header for signature verification.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Edge runtime required for raw body access in Next.js App Router
-export const runtime = 'edge'
+export const dynamic = 'force-dynamic'
 
 import Stripe from 'stripe'
 import { prisma } from '@/lib/db'
@@ -37,7 +36,7 @@ export async function POST(request) {
   let event
 
   try {
-    event = await stripe.webhooks.constructEventAsync(
+    event = stripe.webhooks.constructEvent(
       rawBody,
       signature,
       process.env.STRIPE_WEBHOOK_SECRET
