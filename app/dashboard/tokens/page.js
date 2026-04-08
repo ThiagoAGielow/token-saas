@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import TokenBalance from '@/components/TokenBalance';
 
 const PLAN_FEATURES = {
@@ -9,20 +10,23 @@ const PLAN_FEATURES = {
 };
 
 export default function TokensPage() {
+  const searchParams = useSearchParams();
+  const router       = useRouter();
+
   const [packs, setPacks]               = useState([]);
   const [plans, setPlans]               = useState([]);
   const [wallet, setWallet]             = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [subscription, setSubscription] = useState(null);
 
-  const [selectedPack, setSelectedPack] = useState(null);
-  const [checkingOut, setCheckingOut]   = useState(null); // priceId being processed
-  const [error, setError]               = useState(null);
+  const [selectedPack, setSelectedPack]     = useState(null);
+  const [checkingOut, setCheckingOut]       = useState(null);
+  const [error, setError]                   = useState(null);
   const [referralCopied, setReferralCopied] = useState(false);
+  const [successToast, setSuccessToast]     = useState(false);
 
-  // Load pricing + wallet data on mount
-  useEffect(() => {
-    Promise.all([
+  const loadData = useCallback(() => {
+    return Promise.all([
       fetch('/api/pricing').then((r) => r.json()),
       fetch('/api/tokens').then((r) => r.json()),
     ]).then(([pricing, tokenData]) => {
@@ -33,6 +37,21 @@ export default function TokensPage() {
       setSubscription(tokenData.subscription || null);
     }).catch(console.error);
   }, []);
+
+  // Load data on mount
+  useEffect(() => { loadData(); }, [loadData]);
+
+  // Handle ?checkout=success redirect from Stripe
+  useEffect(() => {
+    if (searchParams.get('checkout') === 'success') {
+      // Wait a moment for the webhook to process, then refresh
+      setSuccessToast(true);
+      setTimeout(() => loadData(), 2000);
+      setTimeout(() => setSuccessToast(false), 6000);
+      // Clean up the URL
+      router.replace('/dashboard/tokens');
+    }
+  }, [searchParams, loadData, router]);
 
   const handleCheckout = async (priceId, mode) => {
     setError(null);
@@ -66,6 +85,20 @@ export default function TokensPage() {
 
   return (
     <div className="space-y-6 max-w-4xl">
+
+      {/* Purchase success toast */}
+      {successToast && (
+        <div className="fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-4 rounded-xl bg-green-500/10 border border-green-500/30 text-green-400 shadow-xl animate-in slide-in-from-top-2 duration-300">
+          <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          <div>
+            <p className="font-semibold text-sm">Payment successful!</p>
+            <p className="text-xs text-green-400/70">Your tokens have been credited to your account.</p>
+          </div>
+        </div>
+      )}
+
       {/* Current balance */}
       <TokenBalance />
 
