@@ -4,6 +4,8 @@
 // GET /api/websites — list the authenticated user's websites
 // ─────────────────────────────────────────────────────────────────────────────
 
+export const dynamic = 'force-dynamic'
+
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'

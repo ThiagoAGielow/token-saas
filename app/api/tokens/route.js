@@ -5,6 +5,8 @@
 // POST /api/tokens/spend — deduct tokens for a platform action
 // ─────────────────────────────────────────────────────────────────────────────
 
+export const dynamic = 'force-dynamic'
+
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
