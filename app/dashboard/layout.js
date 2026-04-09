@@ -82,11 +82,20 @@ function IcoCoin() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+function IcoAgency() {
+  return (
+    <svg width="20" height="20" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 20h5v-2a4 4 0 00-5-3.87M9 20H4v-2a4 4 0 015-3.87m6-4a4 4 0 11-8 0 4 4 0 018 0zm6 4a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+    </svg>
+  );
+}
+
 const NAV_ITEMS = [
   { label: 'Overview',  href: '/dashboard',           icon: <IcoOverview />,  exact: true },
   { label: 'Websites',  href: '/dashboard/websites',  icon: <IcoWebsites />,  badge: '3' },
   { label: 'Domains',   href: '/dashboard/domains',   icon: <IcoDomains />,   badge: '2' },
   { label: 'Emails',    href: '/dashboard/emails',    icon: <IcoEmails />,    badge: '5' },
+  { label: 'Agency',    href: '/dashboard/agency',    icon: <IcoAgency /> },
   { label: 'API Keys',  href: '/dashboard/api-keys',  icon: <IcoApiKeys /> },
   { label: 'Usage',     href: '/dashboard/usage',     icon: <IcoUsage /> },
   { label: 'Settings',  href: '/dashboard/settings',  icon: <IcoSettings /> },
@@ -137,6 +146,7 @@ export default function DashboardLayout({ children }) {
     if (pathname.startsWith('/dashboard/usage')) return 'Usage & Analytics';
     if (pathname.startsWith('/dashboard/tokens')) return 'Buy Tokens';
     if (pathname.startsWith('/dashboard/settings')) return 'Settings';
+    if (pathname.startsWith('/dashboard/agency')) return 'Agency Portal';
     return 'Dashboard';
   };
 

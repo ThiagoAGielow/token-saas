@@ -77,6 +77,7 @@ export async function GET() {
     ])
 
     return NextResponse.json({
+      role: user.role,
       wallet: {
         balance:        wallet.balance,
         lifetimeEarned: wallet.lifetimeEarned,

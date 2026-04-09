@@ -15,6 +15,11 @@ datasource db {
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
+enum UserRole {
+  USER
+  AGENCY
+}
+
 enum TransactionType {
   PURCHASE
   SPEND
@@ -61,6 +66,13 @@ model User {
   referrer     User?    @relation("Referrals", fields: [referredBy], references: [id])
   referrals    User[]   @relation("Referrals")
 
+  /// Agency role — USER (default) or AGENCY
+  role         UserRole @default(USER)
+
+  // Agency relations
+  agencyClients  AgencyClient[] @relation("AgencyOwner")
+  agencyOf       AgencyClient[] @relation("AgencyClient")
+
   // Relations
   wallet            TokenWallet?
   apiKeys           ApiKey[]
@@ -71,10 +83,12 @@ model User {
   transactions      TokenTransaction[]
   grants            TokenGrant[]
   subscription      Subscription?
+  agencyInvites     AgencyInvite[]
 
   @@index([clerkId])
   @@index([referralCode])
   @@index([referredBy])
+  @@index([role])
 }
 
 // ─── Token Wallet ─────────────────────────────────────────────────────────────
@@ -291,6 +305,37 @@ model UserAiKey {
 
   @@unique([userId, provider])
   @@index([userId])
+}
+
+// ─── Agency ───────────────────────────────────────────────────────────────────
+
+/// Links an agency user to a client user they manage
+model AgencyClient {
+  id        String   @id @default(cuid())
+  agencyId  String
+  agency    User     @relation("AgencyOwner", fields: [agencyId], references: [id], onDelete: Cascade)
+  clientId  String
+  client    User     @relation("AgencyClient", fields: [clientId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([agencyId, clientId])
+  @@index([agencyId])
+  @@index([clientId])
+}
+
+/// One-time invite links for agencies to onboard clients
+model AgencyInvite {
+  id        String    @id @default(cuid())
+  agencyId  String
+  agency    User      @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  token     String    @unique @default(cuid())
+  email     String?
+  usedAt    DateTime?
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+
+  @@index([agencyId])
+  @@index([token])
 }
 
 // ─── Email Account ────────────────────────────────────────────────────────────
