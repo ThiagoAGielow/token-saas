@@ -1,19 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-
-// TODO: replace with real data from API
-const MOCK_DATA = {
-  user: { name: 'Thiago' },
-  tokenBalance: 650,
-  monthlyAllowance: 2000,
-  tokensUsedThisMonth: 1350,
-  websitesCreated: 3,
-  domainsConnected: 2,
-  emailsActive: 5,
-  avgDailyUsage: 32,
-};
 
 // ─── SVG Icons ────────────────────────────────────────────────────────────────
 
@@ -57,23 +45,37 @@ function IconSparkle({ className = 'w-5 h-5' }) {
   );
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function timeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins  = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days  = Math.floor(diff / 86400000);
+  if (mins < 60)  return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
+
+function txIcon(tx) {
+  const d = (tx.description ?? '').toLowerCase();
+  if (d.includes('website'))          return { icon: <IconGlobe />,   color: 'text-blue-400' };
+  if (d.includes('domain'))           return { icon: <IconLink />,    color: 'text-purple-400' };
+  if (d.includes('email'))            return { icon: <IconMail />,    color: 'text-green-400' };
+  if (d.includes('ai') || d.includes('rewrite')) return { icon: <IconSparkle />, color: 'text-pink-400' };
+  return { icon: <IconCoin />, color: 'text-amber-400' };
+}
+
 const ACTION_COSTS = [
   { label: 'Create a Website', cost: 50, icon: <IconGlobe /> },
   { label: 'Connect a Domain', cost: 20, icon: <IconLink /> },
-  { label: 'Set Up an Email', cost: 10, icon: <IconMail /> },
+  { label: 'Set Up an Email',  cost: 10, icon: <IconMail /> },
   { label: 'AI Content Rewrite', cost: 3, icon: <IconSparkle /> },
 ];
 
-// TODO: replace with real activity feed from API
-const MOCK_ACTIVITY = [
-  { id: 1, action: 'Website created', detail: 'myshop.tokenflow.app', tokens: -50, balance: 650, time: '2 hours ago', icon: <IconGlobe />, color: 'text-blue-400' },
-  { id: 2, action: 'AI Rewrite', detail: 'Homepage hero text', tokens: -3, balance: 700, time: '5 hours ago', icon: <IconSparkle />, color: 'text-pink-400' },
-  { id: 3, action: 'Email account setup', detail: 'hello@myshop.com', tokens: -10, balance: 703, time: '1 day ago', icon: <IconMail />, color: 'text-green-400' },
-  { id: 4, action: 'Domain connected', detail: 'myshop.com', tokens: -20, balance: 713, time: '1 day ago', icon: <IconLink />, color: 'text-purple-400' },
-  { id: 5, action: 'Token top-up', detail: '$25 pack — 1500 tokens', tokens: +1500, balance: 733, time: '3 days ago', icon: <IconCoin />, color: 'text-amber-400' },
-];
+// ─── Components ───────────────────────────────────────────────────────────────
 
-function StatCard({ title, value, subtitle, icon, accent, href }) {
+function StatCard({ title, value, subtitle, icon, accent, href, loading }) {
   const content = (
     <div className={`p-5 rounded-xl bg-[#111] border border-white/10 hover:border-white/20 transition-all duration-200 group ${href ? 'cursor-pointer' : ''}`}>
       <div className="flex items-start justify-between mb-4">
@@ -86,7 +88,11 @@ function StatCard({ title, value, subtitle, icon, accent, href }) {
           </svg>
         )}
       </div>
-      <p className="text-3xl font-black text-white tabular-nums mb-1">{value}</p>
+      {loading ? (
+        <div className="h-8 w-16 bg-white/10 rounded animate-pulse mb-1" />
+      ) : (
+        <p className="text-3xl font-black text-white tabular-nums mb-1">{value}</p>
+      )}
       <p className="text-sm font-medium text-gray-300">{title}</p>
       {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
     </div>
@@ -96,14 +102,55 @@ function StatCard({ title, value, subtitle, icon, accent, href }) {
   return content;
 }
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function DashboardPage() {
   const [selectedAction, setSelectedAction] = useState(ACTION_COSTS[0]);
-  const { tokenBalance, monthlyAllowance, tokensUsedThisMonth, avgDailyUsage, user } = MOCK_DATA;
-  const daysRemaining = Math.floor(tokenBalance / avgDailyUsage);
-  const percentUsed = Math.round((tokensUsedThisMonth / monthlyAllowance) * 100);
-  const canAfford = tokenBalance >= selectedAction.cost;
+  const [loading, setLoading]               = useState(true);
+  const [data, setData]                     = useState(null);
 
-  const hour = new Date().getHours();
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/tokens').then((r) => r.json()),
+      fetch('/api/websites').then((r) => r.json()),
+      fetch('/api/domains').then((r) => r.json()),
+      fetch('/api/emails').then((r) => r.json()),
+    ]).then(([tokens, websites, domains, emails]) => {
+      setData({ tokens, websites, domains, emails });
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  const tokenBalance    = data?.tokens?.wallet?.balance ?? 0;
+  const lifetimeSpent   = data?.tokens?.wallet?.lifetimeSpent ?? 0;
+  const daysRemaining   = data?.tokens?.daysRemaining ?? 0;
+  const transactions    = data?.tokens?.transactions ?? [];
+  const websiteCount    = data?.websites?.websites?.length ?? 0;
+  const domainCount     = data?.domains?.domains?.filter((d) => d.verified)?.length ?? 0;
+  const emailCount      = data?.emails?.emails?.length ?? 0;
+  const canAfford       = tokenBalance >= selectedAction.cost;
+
+  // Compute this-month spend breakdown from transactions
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthTx = transactions.filter(
+    (t) => t.amount < 0 && new Date(t.createdAt) >= monthStart
+  );
+  const monthSpent = monthTx.reduce((s, t) => s + Math.abs(t.amount), 0);
+
+  const breakdown = { websites: 0, domains: 0, emails: 0, ai: 0, other: 0 };
+  for (const t of monthTx) {
+    const d = (t.description ?? '').toLowerCase();
+    if (d.includes('website'))                   breakdown.websites += Math.abs(t.amount);
+    else if (d.includes('domain'))               breakdown.domains  += Math.abs(t.amount);
+    else if (d.includes('email'))                breakdown.emails   += Math.abs(t.amount);
+    else if (d.includes('ai') || d.includes('rewrite')) breakdown.ai += Math.abs(t.amount);
+    else                                         breakdown.other    += Math.abs(t.amount);
+  }
+
+  const recentActivity = transactions.slice(0, 6);
+
+  const hour     = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   return (
@@ -111,20 +158,18 @@ export default function DashboardPage() {
       {/* Welcome header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-white">
-            {greeting}, {user.name}
-          </h2>
+          <h2 className="text-2xl font-bold text-white">{greeting}</h2>
           <p className="text-gray-400 mt-1 text-sm">
             Here&apos;s what&apos;s happening with your account today.
           </p>
         </div>
-        <div className="text-right">
-          <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Projected empty</p>
-          <p className="text-2xl font-black text-amber-400 tabular-nums">
-            {daysRemaining}d
-          </p>
-          <p className="text-xs text-gray-500">at {avgDailyUsage} tokens/day</p>
-        </div>
+        {!loading && daysRemaining > 0 && (
+          <div className="text-right">
+            <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Projected empty</p>
+            <p className="text-2xl font-black text-amber-400 tabular-nums">{daysRemaining}d</p>
+            <p className="text-xs text-gray-500">at current usage rate</p>
+          </div>
+        )}
       </div>
 
       {/* Stat cards */}
@@ -136,68 +181,86 @@ export default function DashboardPage() {
           icon={<IconCoin className="w-5 h-5 text-amber-400" />}
           accent="bg-amber-400/10"
           href="/dashboard/tokens"
+          loading={loading}
         />
         <StatCard
           title="Websites Created"
-          value={MOCK_DATA.websitesCreated}
+          value={websiteCount}
           subtitle="active sites"
           icon={<IconGlobe className="w-5 h-5 text-blue-400" />}
           accent="bg-blue-500/10"
           href="/dashboard/websites"
+          loading={loading}
         />
         <StatCard
           title="Domains Connected"
-          value={MOCK_DATA.domainsConnected}
+          value={domainCount}
           subtitle="verified domains"
           icon={<IconLink className="w-5 h-5 text-purple-400" />}
           accent="bg-purple-500/10"
           href="/dashboard/domains"
+          loading={loading}
         />
         <StatCard
           title="Emails Active"
-          value={MOCK_DATA.emailsActive}
+          value={emailCount}
           subtitle="mailboxes"
           icon={<IconMail className="w-5 h-5 text-green-400" />}
           accent="bg-green-500/10"
           href="/dashboard/emails"
+          loading={loading}
         />
       </div>
 
       {/* Middle row */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {/* Token usage progress */}
+        {/* Token usage this month */}
         <div className="lg:col-span-2 p-5 rounded-xl bg-[#111] border border-white/10">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-white">Monthly Token Usage</h3>
+            <h3 className="font-semibold text-white">This Month&apos;s Usage</h3>
             <Link href="/dashboard/usage" className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
               View details →
             </Link>
           </div>
 
-          <div className="flex items-end gap-2 mb-3">
-            <span className="text-3xl font-black text-white tabular-nums">{tokensUsedThisMonth.toLocaleString()}</span>
-            <span className="text-gray-500 mb-1">/ {monthlyAllowance.toLocaleString()} tokens</span>
-            <span className="ml-auto text-sm font-semibold text-gray-300">{percentUsed}%</span>
-          </div>
+          {loading ? (
+            <div className="space-y-3">
+              <div className="h-8 w-32 bg-white/10 rounded animate-pulse" />
+              <div className="h-3 w-full bg-white/10 rounded-full animate-pulse" />
+            </div>
+          ) : monthSpent === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500 text-sm">No tokens spent this month yet.</p>
+              <p className="text-gray-600 text-xs mt-1">Create a site or add a domain to get started.</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-end gap-2 mb-3">
+                <span className="text-3xl font-black text-white tabular-nums">{monthSpent.toLocaleString()}</span>
+                <span className="text-gray-500 mb-1">tokens spent this month</span>
+              </div>
 
-          {/* Segmented usage bar */}
-          <div className="w-full h-3 bg-white/5 rounded-full overflow-hidden mb-3 flex">
-            <div className="h-full bg-blue-500" style={{ width: '18%' }} title="Websites: 360 tokens" />
-            <div className="h-full bg-purple-500 ml-0.5" style={{ width: '3%' }} title="Domains: 60 tokens" />
-            <div className="h-full bg-green-500 ml-0.5" style={{ width: '4%' }} title="Emails: 80 tokens" />
-            <div className="h-full bg-pink-500 ml-0.5" style={{ width: '43%' }} title="AI Rewrites: 850 tokens" />
-          </div>
+              <div className="w-full h-3 bg-white/5 rounded-full overflow-hidden mb-3 flex">
+                {breakdown.websites > 0 && <div className="h-full bg-blue-500"   style={{ width: `${(breakdown.websites / monthSpent) * 100}%` }} />}
+                {breakdown.domains  > 0 && <div className="h-full bg-purple-500 ml-0.5" style={{ width: `${(breakdown.domains  / monthSpent) * 100}%` }} />}
+                {breakdown.emails   > 0 && <div className="h-full bg-green-500  ml-0.5" style={{ width: `${(breakdown.emails   / monthSpent) * 100}%` }} />}
+                {breakdown.ai       > 0 && <div className="h-full bg-pink-500   ml-0.5" style={{ width: `${(breakdown.ai       / monthSpent) * 100}%` }} />}
+                {breakdown.other    > 0 && <div className="h-full bg-gray-500   ml-0.5" style={{ width: `${(breakdown.other    / monthSpent) * 100}%` }} />}
+              </div>
 
-          <div className="flex items-center gap-4 text-xs text-gray-400">
-            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Websites (360)</span>
-            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-purple-500 inline-block" />Domains (60)</span>
-            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Emails (80)</span>
-            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-pink-500 inline-block" />AI (850)</span>
-          </div>
+              <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400">
+                {breakdown.websites > 0 && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Websites ({breakdown.websites})</span>}
+                {breakdown.domains  > 0 && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-purple-500 inline-block" />Domains ({breakdown.domains})</span>}
+                {breakdown.emails   > 0 && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Emails ({breakdown.emails})</span>}
+                {breakdown.ai       > 0 && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-pink-500 inline-block" />AI ({breakdown.ai})</span>}
+                {breakdown.other    > 0 && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-gray-500 inline-block" />Other ({breakdown.other})</span>}
+              </div>
+            </>
+          )}
 
           <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
-            <span className="text-sm text-gray-400">{tokenBalance.toLocaleString()} tokens remaining this month</span>
-            <span className="text-xs text-gray-500">Resets in 12 days</span>
+            <span className="text-sm text-gray-400">{tokenBalance.toLocaleString()} tokens remaining</span>
+            <span className="text-xs text-gray-500">{lifetimeSpent.toLocaleString()} spent all time</span>
           </div>
         </div>
 
@@ -240,7 +303,7 @@ export default function DashboardPage() {
               </span>
             </div>
             <div className={`text-xs font-semibold text-center py-1 rounded ${canAfford ? 'text-green-400' : 'text-red-400'}`}>
-              {canAfford ? 'You can afford this action' : 'Insufficient tokens'}
+              {loading ? '…' : canAfford ? 'You can afford this action' : 'Insufficient tokens'}
             </div>
           </div>
         </div>
@@ -257,25 +320,47 @@ export default function DashboardPage() {
             </Link>
           </div>
 
-          <div className="space-y-1">
-            {MOCK_ACTIVITY.map((item, i) => (
-              <div key={item.id} className={`flex items-center gap-3 py-3 ${i < MOCK_ACTIVITY.length - 1 ? 'border-b border-white/5' : ''}`}>
-                <div className={`w-8 h-8 rounded-lg bg-[#1a1a1a] flex items-center justify-center flex-shrink-0 ${item.color}`}>
-                  {item.icon}
+          {loading ? (
+            <div className="space-y-3">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3 py-2">
+                  <div className="w-8 h-8 bg-white/10 rounded-lg animate-pulse shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3 w-40 bg-white/10 rounded animate-pulse" />
+                    <div className="h-2.5 w-24 bg-white/10 rounded animate-pulse" />
+                  </div>
+                  <div className="h-3 w-12 bg-white/10 rounded animate-pulse" />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white font-medium">{item.action}</p>
-                  <p className="text-xs text-gray-500 truncate">{item.detail}</p>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <p className={`text-sm font-bold tabular-nums ${item.tokens > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {item.tokens > 0 ? '+' : ''}{item.tokens}
-                  </p>
-                  <p className="text-xs text-gray-600">{item.time}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : recentActivity.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500 text-sm">No activity yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {recentActivity.map((tx, i) => {
+                const { icon, color } = txIcon(tx);
+                return (
+                  <div key={tx.id} className={`flex items-center gap-3 py-3 ${i < recentActivity.length - 1 ? 'border-b border-white/5' : ''}`}>
+                    <div className={`w-8 h-8 rounded-lg bg-[#1a1a1a] flex items-center justify-center flex-shrink-0 ${color}`}>
+                      {icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white font-medium">{tx.description}</p>
+                      <p className="text-xs text-gray-500">{timeAgo(tx.createdAt)}</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className={`text-sm font-bold tabular-nums ${tx.amount > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {tx.amount > 0 ? '+' : ''}{tx.amount}
+                      </p>
+                      <p className="text-xs text-gray-600">{tx.balanceAfter} left</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Quick actions */}
