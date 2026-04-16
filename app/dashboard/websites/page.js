@@ -6,17 +6,19 @@ const PLATFORM_DOMAIN = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || 'velocitysite
 
 const STATUS_STYLES = {
   ACTIVE:   'bg-green-500/15 text-green-400 border-green-500/25',
+  DRAFT:    'bg-blue-500/15 text-blue-400 border-blue-500/25',
   BUILDING: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/25',
   PAUSED:   'bg-red-500/15 text-red-400 border-red-500/25',
 };
 
 const STATUS_DOT = {
   ACTIVE:   'bg-green-400',
+  DRAFT:    'bg-blue-400',
   BUILDING: 'bg-yellow-400 animate-pulse',
   PAUSED:   'bg-red-400',
 };
 
-const STATUS_LABEL = { ACTIVE: 'Live', BUILDING: 'Building', PAUSED: 'Paused' };
+const STATUS_LABEL = { ACTIVE: 'Live', DRAFT: 'Draft', BUILDING: 'Building', PAUSED: 'Paused' };
 
 const PROVIDERS = [
   { value: 'claude', label: 'Claude (Anthropic)' },
@@ -40,8 +42,9 @@ export default function WebsitesPage() {
   const [balance, setBalance]       = useState(null);
   const [loading, setLoading]       = useState(true);
   const [showModal, setShowModal]   = useState(false);
-  const [creating, setCreating]     = useState(false);
-  const [error, setError]           = useState(null);
+  const [creating, setCreating]       = useState(false);
+  const [publishing, setPublishing]   = useState(null); // siteId being published
+  const [error, setError]             = useState(null);
   const [createError, setCreateError] = useState(null);
 
   const [form, setForm] = useState({
@@ -50,6 +53,17 @@ export default function WebsitesPage() {
     prompt:    '',
     provider:  'claude',
   });
+
+  // ── Publish a site ────────────────────────────────────────────────────────
+  async function handlePublish(siteId) {
+    setPublishing(siteId);
+    try {
+      const res = await fetch(`/api/websites/${siteId}`, { method: 'PATCH' });
+      if (res.ok) await loadData();
+    } finally {
+      setPublishing(null);
+    }
+  }
 
   // ── Fetch websites + balance ───────────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -318,6 +332,15 @@ export default function WebsitesPage() {
                 >
                   Edit
                 </Link>
+                {site.status === 'DRAFT' && (
+                  <button
+                    onClick={() => handlePublish(site.id)}
+                    disabled={publishing === site.id}
+                    className="flex-1 py-1.5 rounded-lg bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-xs text-green-400 font-semibold transition-colors disabled:opacity-50"
+                  >
+                    {publishing === site.id ? 'Publishing…' : 'Publish'}
+                  </button>
+                )}
               </div>
             </div>
           </div>

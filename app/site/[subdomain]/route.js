@@ -86,11 +86,16 @@ export async function GET(request, { params }) {
       return new Response('Not found', { status: 404 })
     }
 
-    const html = website.generatedHtml || comingSoonHtml(website.name, subdomain)
+    const isDraft = website.status === 'DRAFT' || website.status === 'BUILDING'
+    const html    = website.generatedHtml || comingSoonHtml(website.name, subdomain)
 
     return new Response(html, {
       status:  200,
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: {
+        'Content-Type':  'text/html; charset=utf-8',
+        // Prevent search engines from indexing unpublished sites
+        ...(isDraft ? { 'X-Robots-Tag': 'noindex, nofollow' } : {}),
+      },
     })
   } catch (error) {
     console.error('[GET /site/[subdomain]]', error)

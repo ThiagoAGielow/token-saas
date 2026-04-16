@@ -20,10 +20,11 @@ function displayContent(content) {
 export default function WebsiteChatPage({ params }) {
   const { id } = params;
 
-  const [website,  setWebsite]  = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState(null);
+  const [website,    setWebsite]    = useState(null);
+  const [messages,   setMessages]   = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState(null);
+  const [publishing, setPublishing] = useState(false);
 
   const [input,    setInput]    = useState('');
   const [provider, setProvider] = useState('claude');
@@ -33,6 +34,17 @@ export default function WebsiteChatPage({ params }) {
   const bottomRef   = useRef(null);
   const inputRef    = useRef(null);
   const textareaRef = useRef(null);
+
+  // ── Publish ────────────────────────────────────────────────────────────────
+  async function handlePublish() {
+    setPublishing(true);
+    try {
+      const res = await fetch(`/api/websites/${id}`, { method: 'PATCH' });
+      if (res.ok) setWebsite(prev => ({ ...prev, status: 'ACTIVE' }));
+    } finally {
+      setPublishing(false);
+    }
+  }
 
   // ── Load history ───────────────────────────────────────────────────────────
   const loadChat = useCallback(async () => {
@@ -207,6 +219,38 @@ export default function WebsiteChatPage({ params }) {
           >
             {PROVIDERS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
           </select>
+
+          {website?.status === 'DRAFT' && (
+            <button
+              onClick={handlePublish}
+              disabled={publishing}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-xs text-green-400 font-semibold transition-colors disabled:opacity-50"
+            >
+              {publishing ? (
+                <>
+                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  Publishing…
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Publish site
+                </>
+              )}
+            </button>
+          )}
+
+          {website?.status === 'ACTIVE' && (
+            <span className="flex items-center gap-1.5 text-xs text-green-400 font-medium px-3 py-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+              Live
+            </span>
+          )}
 
           <a
             href={siteUrl}

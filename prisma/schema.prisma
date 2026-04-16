@@ -44,6 +44,7 @@ enum SubscriptionPlan {
 
 enum WebsiteStatus {
   BUILDING
+  DRAFT
   ACTIVE
   PAUSED
 }

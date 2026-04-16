@@ -196,13 +196,13 @@ export async function POST(request) {
       }
     }
 
-    // ── Save HTML + mark ACTIVE ────────────────────────────────────────────
+    // ── Save HTML + mark DRAFT (user must explicitly publish) ─────────────
     const updated = await prisma.website.update({
       where: { id: website.id },
       data:  {
         generatedHtml,
-        status:       'ACTIVE',
-        publishedAt:  new Date(),
+        status:       'DRAFT',
+        publishedAt:  null,
         ...(githubRepo      ? { githubRepo }      : {}),
         ...(githubRepoUrl   ? { githubRepoUrl }   : {}),
         ...(vercelProjectId ? { vercelProjectId } : {}),
