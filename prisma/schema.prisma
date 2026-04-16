@@ -246,6 +246,12 @@ model Website {
   /// Full GitHub repository URL
   githubRepoUrl String?
 
+  /// Vercel project ID for deployment management
+  vercelProjectId String?
+
+  /// Live Vercel deployment URL (null while first deploy is in progress)
+  vercelUrl       String?
+
   publishedAt   DateTime?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt

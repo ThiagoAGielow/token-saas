@@ -13,7 +13,8 @@ import { prisma }         from '@/lib/db'
 import { getOrCreateUser } from '@/lib/user'
 import { spendTokens, getBalance, TOKEN_COSTS } from '@/lib/tokens'
 import { callAI }             from '@/lib/ai'
-import { provisionSiteRepo }  from '@/lib/github'
+import { provisionSiteRepo }   from '@/lib/github'
+import { createVercelProject } from '@/lib/vercel'
 
 const SUBDOMAIN_RE = /^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/
 
@@ -44,17 +45,19 @@ export async function GET() {
     const websites = await prisma.website.findMany({
       where:   { userId: user.id },
       select: {
-        id:            true,
-        name:          true,
-        subdomain:     true,
-        status:        true,
-        tokenCost:     true,
-        prompt:        true,
-        githubRepo:    true,
-        githubRepoUrl: true,
-        publishedAt:   true,
-        createdAt:     true,
-        updatedAt:     true,
+        id:              true,
+        name:            true,
+        subdomain:       true,
+        status:          true,
+        tokenCost:       true,
+        prompt:          true,
+        githubRepo:      true,
+        githubRepoUrl:   true,
+        vercelProjectId: true,
+        vercelUrl:       true,
+        publishedAt:     true,
+        createdAt:       true,
+        updatedAt:       true,
         domain: {
           select: { domain: true, verified: true },
         },
@@ -176,6 +179,23 @@ export async function POST(request) {
       console.error('[POST /api/websites] GitHub provisioning failed:', ghError)
     }
 
+    // ── Provision Vercel project ───────────────────────────────────────────
+    let vercelProjectId = null
+    let vercelUrl       = null
+    if (githubRepo) {
+      try {
+        const vp = await createVercelProject({
+          repoName: githubRepo,
+          siteName: name.trim(),
+        })
+        vercelProjectId = vp.projectId
+        vercelUrl       = vp.vercelUrl
+      } catch (vcError) {
+        // Vercel failure is non-fatal — GitHub repo + subdomain still work
+        console.error('[POST /api/websites] Vercel project creation failed:', vcError)
+      }
+    }
+
     // ── Save HTML + mark ACTIVE ────────────────────────────────────────────
     const updated = await prisma.website.update({
       where: { id: website.id },
@@ -183,8 +203,10 @@ export async function POST(request) {
         generatedHtml,
         status:       'ACTIVE',
         publishedAt:  new Date(),
-        ...(githubRepo    ? { githubRepo }    : {}),
-        ...(githubRepoUrl ? { githubRepoUrl } : {}),
+        ...(githubRepo      ? { githubRepo }      : {}),
+        ...(githubRepoUrl   ? { githubRepoUrl }   : {}),
+        ...(vercelProjectId ? { vercelProjectId } : {}),
+        ...(vercelUrl       ? { vercelUrl }       : {}),
       },
       select: {
         id:          true,

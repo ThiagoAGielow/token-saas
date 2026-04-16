@@ -272,6 +272,30 @@ export default function WebsitesPage() {
                     <span className="truncate">{site.githubRepo}</span>
                   </a>
                 )}
+                {site.vercelProjectId && (
+                  site.vercelUrl
+                    ? (
+                      <a
+                        href={site.vercelUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                      >
+                        <svg className="w-3 h-3 shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 2L2 19.5h20L12 2z" />
+                        </svg>
+                        <span className="truncate">Vercel deployment</span>
+                      </a>
+                    ) : (
+                      <p className="flex items-center gap-1.5 text-xs text-yellow-500/70">
+                        <svg className="w-3 h-3 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                        </svg>
+                        Deploying to Vercel…
+                      </p>
+                    )
+                )}
               </div>
 
               <div className="flex items-center justify-between text-xs text-gray-500 mb-3 pb-3 border-b border-white/5">
