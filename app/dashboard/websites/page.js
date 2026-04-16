@@ -1,88 +1,176 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
-// TODO: replace with real data from API
-const MOCK_WEBSITES = [
-  {
-    id: 1,
-    name: 'My Shop',
-    subdomain: 'myshop.tokenflow.app',
-    customDomain: 'myshop.com',
-    status: 'live',
-    template: 'E-commerce',
-    tokensCost: 50,
-    createdAt: 'Mar 28, 2026',
-    lastUpdated: '2 hours ago',
-    pageViews: 1284,
-    thumbnail: null,
-  },
-  {
-    id: 2,
-    name: 'Portfolio',
-    subdomain: 'portfolio.tokenflow.app',
-    customDomain: null,
-    status: 'live',
-    template: 'Portfolio',
-    tokensCost: 50,
-    createdAt: 'Mar 15, 2026',
-    lastUpdated: '5 days ago',
-    pageViews: 342,
-    thumbnail: null,
-  },
-  {
-    id: 3,
-    name: 'Blog Draft',
-    subdomain: 'blog-draft.tokenflow.app',
-    customDomain: null,
-    status: 'draft',
-    template: 'Blog',
-    tokensCost: 50,
-    createdAt: 'Mar 30, 2026',
-    lastUpdated: '1 day ago',
-    pageViews: 0,
-    thumbnail: null,
-  },
-];
+const PLATFORM_DOMAIN = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || 'velocitysites.com.au';
 
 const STATUS_STYLES = {
-  live: 'bg-green-500/15 text-green-400 border-green-500/25',
-  draft: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/25',
-  offline: 'bg-red-500/15 text-red-400 border-red-500/25',
+  ACTIVE:   'bg-green-500/15 text-green-400 border-green-500/25',
+  BUILDING: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/25',
+  PAUSED:   'bg-red-500/15 text-red-400 border-red-500/25',
 };
 
 const STATUS_DOT = {
-  live: 'bg-green-400',
-  draft: 'bg-yellow-400',
-  offline: 'bg-red-400',
+  ACTIVE:   'bg-green-400',
+  BUILDING: 'bg-yellow-400 animate-pulse',
+  PAUSED:   'bg-red-400',
 };
 
-export default function WebsitesPage() {
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const tokenBalance = 650; // TODO: replace with real balance from context
+const STATUS_LABEL = { ACTIVE: 'Live', BUILDING: 'Building', PAUSED: 'Paused' };
 
-  if (MOCK_WEBSITES.length === 0) {
+const PROVIDERS = [
+  { value: 'claude', label: 'Claude (Anthropic)' },
+  { value: 'openai', label: 'GPT-4o (OpenAI)' },
+  { value: 'gemini', label: 'Gemini (Google)' },
+];
+
+function timeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins  = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days  = Math.floor(diff / 86400000);
+  if (mins  < 1)   return 'just now';
+  if (mins  < 60)  return `${mins}m ago`;
+  if (hours < 24)  return `${hours}h ago`;
+  return `${days}d ago`;
+}
+
+export default function WebsitesPage() {
+  const [websites, setWebsites]     = useState([]);
+  const [balance, setBalance]       = useState(null);
+  const [loading, setLoading]       = useState(true);
+  const [showModal, setShowModal]   = useState(false);
+  const [creating, setCreating]     = useState(false);
+  const [error, setError]           = useState(null);
+  const [createError, setCreateError] = useState(null);
+
+  const [form, setForm] = useState({
+    name:      '',
+    subdomain: '',
+    prompt:    '',
+    provider:  'claude',
+  });
+
+  // ── Fetch websites + balance ───────────────────────────────────────────────
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [sitesRes, tokensRes] = await Promise.all([
+        fetch('/api/websites'),
+        fetch('/api/tokens'),
+      ]);
+      const sitesData  = await sitesRes.json();
+      const tokensData = await tokensRes.json();
+      if (!sitesRes.ok)  throw new Error(sitesData.error || 'Failed to load websites');
+      if (!tokensRes.ok) throw new Error(tokensData.error || 'Failed to load balance');
+      setWebsites(sitesData.websites || []);
+      setBalance(tokensData.wallet?.balance ?? 0);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  // ── Auto-fill subdomain from name ─────────────────────────────────────────
+  function handleNameChange(value) {
+    const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    setForm(f => ({ ...f, name: value, subdomain: slug }));
+  }
+
+  // ── Create website ─────────────────────────────────────────────────────────
+  async function handleCreate(e) {
+    e.preventDefault();
+    setCreating(true);
+    setCreateError(null);
+
+    try {
+      const res  = await fetch('/api/websites', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(form),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setCreateError(data.error || 'Failed to create website');
+        return;
+      }
+
+      setShowModal(false);
+      setForm({ name: '', subdomain: '', prompt: '', provider: 'claude' });
+      await loadData();
+    } catch {
+      setCreateError('Something went wrong. Please try again.');
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  const cost    = 50;
+  const canAfford = balance !== null && balance >= cost;
+
+  // ── Loading state ──────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="max-w-5xl space-y-4">
+        <div className="h-8 w-48 bg-white/5 rounded-lg animate-pulse" />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="rounded-xl bg-[#111] border border-white/10 overflow-hidden">
+              <div className="h-36 bg-white/5 animate-pulse" />
+              <div className="p-4 space-y-3">
+                <div className="h-4 w-3/4 bg-white/5 rounded animate-pulse" />
+                <div className="h-3 w-1/2 bg-white/5 rounded animate-pulse" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Error state ────────────────────────────────────────────────────────────
+  if (error) {
+    return (
+      <div className="max-w-5xl">
+        <div className="p-6 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400">
+          <p className="font-semibold mb-1">Failed to load websites</p>
+          <p className="text-sm opacity-80">{error}</p>
+          <button onClick={loadData} className="mt-3 text-sm underline opacity-70 hover:opacity-100">
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Empty state ────────────────────────────────────────────────────────────
+  if (websites.length === 0) {
     return (
       <div className="max-w-4xl">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-lg font-bold text-white">Your Websites</h2>
-            <p className="text-sm text-gray-400 mt-0.5">Each website costs 50 tokens to create</p>
+            <p className="text-sm text-gray-400 mt-0.5">Each website costs {cost} tokens to create</p>
           </div>
         </div>
-
-        {/* Empty state */}
         <div className="flex flex-col items-center justify-center py-24 rounded-xl bg-[#111] border border-white/10 border-dashed">
-          <div className="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center text-3xl mb-4">
-            🌐
+          <div className="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center mb-4">
+            <svg className="w-8 h-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" />
+            </svg>
           </div>
           <h3 className="text-xl font-bold text-white mb-2">Create your first website</h3>
           <p className="text-gray-400 text-sm text-center max-w-sm mb-2">
-            Get a free subdomain on tokenflow.app or connect your own custom domain.
+            Describe your website and AI will build it for you — live on your own subdomain.
           </p>
-          <p className="text-amber-400 font-semibold text-sm mb-6">50 tokens per website</p>
+          <p className="text-amber-400 font-semibold text-sm mb-6">{cost} tokens per website</p>
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => setShowModal(true)}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-500 hover:bg-blue-400 text-white font-semibold text-sm transition-colors"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -91,20 +179,23 @@ export default function WebsitesPage() {
             Create Website
           </button>
         </div>
+        {showModal && <CreateModal {...{ form, setForm, handleNameChange, handleCreate, creating, createError, balance, cost, canAfford, onClose: () => { setShowModal(false); setCreateError(null); } }} />}
       </div>
     );
   }
 
+  // ── Websites list ──────────────────────────────────────────────────────────
   return (
     <div className="max-w-5xl space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-bold text-white">Your Websites</h2>
-          <p className="text-sm text-gray-400 mt-0.5">{MOCK_WEBSITES.length} website{MOCK_WEBSITES.length !== 1 ? 's' : ''} created · 50 tokens each</p>
+          <p className="text-sm text-gray-400 mt-0.5">
+            {websites.length} website{websites.length !== 1 ? 's' : ''} · {cost} tokens each
+          </p>
         </div>
         <button
-          onClick={() => setShowCreateModal(true)}
+          onClick={() => setShowModal(true)}
           className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-400 text-white font-semibold text-sm transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -114,25 +205,24 @@ export default function WebsitesPage() {
         </button>
       </div>
 
-      {/* Websites grid */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
-        {MOCK_WEBSITES.map((site) => (
+        {websites.map((site) => (
           <div
             key={site.id}
-            className="rounded-xl bg-[#111] border border-white/10 hover:border-white/20 transition-all duration-200 overflow-hidden group"
+            className="rounded-xl bg-[#111] border border-white/10 hover:border-white/20 transition-all duration-200 overflow-hidden"
           >
-            {/* Thumbnail placeholder */}
+            {/* Thumbnail */}
             <div className="h-36 bg-gradient-to-br from-[#1a1a1a] to-[#111] border-b border-white/10 flex items-center justify-center relative overflow-hidden">
-              <div className="absolute inset-0 opacity-10"
-                style={{
-                  backgroundImage: 'radial-gradient(circle at 20% 50%, #0ea5e9 0%, transparent 50%), radial-gradient(circle at 80% 20%, #8b5cf6 0%, transparent 50%)',
-                }}
-              />
-              <div className="text-4xl opacity-30">🌐</div>
+              <div className="absolute inset-0 opacity-10" style={{
+                backgroundImage: 'radial-gradient(circle at 20% 50%, #0ea5e9 0%, transparent 50%), radial-gradient(circle at 80% 20%, #8b5cf6 0%, transparent 50%)',
+              }} />
+              <svg className="w-10 h-10 text-white/10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" />
+              </svg>
               <div className="absolute top-3 right-3">
                 <span className={`flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-full border ${STATUS_STYLES[site.status]}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[site.status]}`} />
-                  {site.status.charAt(0).toUpperCase() + site.status.slice(1)}
+                  {STATUS_LABEL[site.status]}
                 </span>
               </div>
             </div>
@@ -141,43 +231,44 @@ export default function WebsitesPage() {
               <div className="flex items-start justify-between mb-2">
                 <div>
                   <h3 className="font-semibold text-white">{site.name}</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">{site.template} template</p>
+                  <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{site.prompt}</p>
                 </div>
-                <span className="text-xs text-amber-400 font-semibold bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">
-                  {site.tokensCost}t
+                <span className="text-xs text-amber-400 font-semibold bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20 shrink-0 ml-2">
+                  {site.tokenCost}t
                 </span>
               </div>
 
               <div className="space-y-1 mb-3">
                 <a
-                  href={`https://${site.subdomain}`}
+                  href={`https://${site.subdomain}.${PLATFORM_DOMAIN}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors group/link"
+                  className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
                 >
-                  <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                   </svg>
-                  <span className="truncate">{site.subdomain}</span>
+                  <span className="truncate">{site.subdomain}.{PLATFORM_DOMAIN}</span>
                 </a>
-                {site.customDomain && (
+                {site.domain?.domain && (
                   <p className="flex items-center gap-1.5 text-xs text-gray-500">
-                    <svg className="w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" />
                     </svg>
-                    <span className="truncate">{site.customDomain}</span>
+                    <span className="truncate">{site.domain.domain}</span>
+                    {site.domain.verified && <span className="text-green-400">✓</span>}
                   </p>
                 )}
               </div>
 
               <div className="flex items-center justify-between text-xs text-gray-500 mb-3 pb-3 border-b border-white/5">
-                <span>{site.pageViews.toLocaleString()} views</span>
-                <span>Updated {site.lastUpdated}</span>
+                <span>Created {new Date(site.createdAt).toLocaleDateString()}</span>
+                <span>Updated {timeAgo(site.updatedAt)}</span>
               </div>
 
               <div className="flex items-center gap-2">
                 <a
-                  href={`https://${site.subdomain}`}
+                  href={`https://${site.subdomain}.${PLATFORM_DOMAIN}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-1 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-gray-300 font-medium text-center transition-colors"
@@ -185,14 +276,7 @@ export default function WebsitesPage() {
                   Preview
                 </a>
                 <button className="flex-1 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-xs text-blue-400 font-medium transition-colors">
-                  {/* TODO: link to site editor */}
                   Edit
-                </button>
-                <button className="p-1.5 rounded-lg bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/20 text-gray-500 hover:text-red-400 transition-all">
-                  {/* TODO: implement delete with confirmation */}
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
                 </button>
               </div>
             </div>
@@ -201,105 +285,192 @@ export default function WebsitesPage() {
 
         {/* Add new card */}
         <button
-          onClick={() => setShowCreateModal(true)}
-          className="rounded-xl border border-dashed border-white/10 hover:border-blue-500/30 hover:bg-blue-500/5 transition-all duration-200 flex flex-col items-center justify-center gap-3 min-h-[280px] text-gray-500 hover:text-blue-400 group"
+          onClick={() => setShowModal(true)}
+          className="rounded-xl border border-dashed border-white/10 hover:border-blue-500/30 hover:bg-blue-500/5 transition-all duration-200 flex flex-col items-center justify-center gap-3 min-h-[280px] text-gray-500 hover:text-blue-400"
         >
-          <div className="w-12 h-12 rounded-xl border-2 border-dashed border-current flex items-center justify-center group-hover:border-blue-500/50 transition-colors">
+          <div className="w-12 h-12 rounded-xl border-2 border-dashed border-current flex items-center justify-center">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
           </div>
           <div className="text-center">
             <p className="text-sm font-medium">New Website</p>
-            <p className="text-xs text-amber-400/70 mt-0.5">50 tokens</p>
+            <p className="text-xs text-amber-400/70 mt-0.5">{cost} tokens</p>
           </div>
         </button>
       </div>
 
-      {/* Create website modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-[#111] border border-white/10 p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-bold text-white">Create New Website</h3>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+      {showModal && (
+        <CreateModal
+          {...{ form, setForm, handleNameChange, handleCreate, creating, createError, balance, cost, canAfford,
+                onClose: () => { setShowModal(false); setCreateError(null); } }}
+        />
+      )}
+    </div>
+  );
+}
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs text-gray-400 mb-1.5 font-medium uppercase tracking-wider">Site Name</label>
-                <input
-                  type="text"
-                  placeholder="My Awesome Site"
-                  className="w-full px-3 py-2.5 rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-blue-500"
-                />
-              </div>
+// ─── Create Website Modal ─────────────────────────────────────────────────────
 
-              <div>
-                <label className="block text-xs text-gray-400 mb-1.5 font-medium uppercase tracking-wider">Subdomain</label>
-                <div className="flex items-center rounded-lg bg-[#1a1a1a] border border-white/10 overflow-hidden focus-within:border-blue-500">
-                  <input
-                    type="text"
-                    placeholder="my-site"
-                    className="flex-1 px-3 py-2.5 bg-transparent text-white text-sm placeholder-gray-600 focus:outline-none"
-                  />
-                  <span className="px-3 py-2.5 text-sm text-gray-500 bg-white/5 border-l border-white/10">.tokenflow.app</span>
-                </div>
-              </div>
+function CreateModal({ form, setForm, handleNameChange, handleCreate, creating, createError, balance, cost, canAfford, onClose }) {
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="w-full max-w-lg rounded-2xl bg-[#111] border border-white/10 p-6 shadow-2xl">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h3 className="text-lg font-bold text-white">Create New Website</h3>
+            <p className="text-xs text-gray-500 mt-0.5">AI will generate your site from your description</p>
+          </div>
+          <button
+            onClick={onClose}
+            disabled={creating}
+            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 transition-colors disabled:opacity-50"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
 
-              <div>
-                <label className="block text-xs text-gray-400 mb-1.5 font-medium uppercase tracking-wider">Template</label>
-                <select className="w-full px-3 py-2.5 rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm focus:outline-none focus:border-blue-500">
-                  <option>Portfolio</option>
-                  <option>Blog</option>
-                  <option>E-commerce</option>
-                  <option>Landing Page</option>
-                  <option>Blank</option>
-                </select>
-              </div>
+        <form onSubmit={handleCreate} className="space-y-4">
+          {/* Name */}
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5 font-medium uppercase tracking-wider">
+              Site Name
+            </label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={e => handleNameChange(e.target.value)}
+              placeholder="My Awesome Business"
+              required
+              disabled={creating}
+              className="w-full px-3 py-2.5 rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-blue-500 disabled:opacity-50"
+            />
+          </div>
 
-              <div className="p-3 rounded-lg bg-amber-400/5 border border-amber-400/10 flex items-center justify-between">
-                <span className="text-sm text-gray-300">Token cost</span>
-                <span className="text-amber-400 font-bold">−50 tokens</span>
-              </div>
-
-              <div className="flex items-center justify-between text-sm text-gray-400">
-                <span>Current balance</span>
-                <span className="text-white font-semibold">{tokenBalance.toLocaleString()} tokens</span>
-              </div>
-              <div className="flex items-center justify-between text-sm text-gray-400">
-                <span>Balance after</span>
-                <span className={`font-semibold ${tokenBalance >= 50 ? 'text-white' : 'text-red-400'}`}>
-                  {(tokenBalance - 50).toLocaleString()} tokens
-                </span>
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="flex-1 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 font-medium text-sm transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                className="flex-1 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-400 text-white font-semibold text-sm transition-colors disabled:opacity-50"
-                disabled={tokenBalance < 50}
-              >
-                {/* TODO: call create website API */}
-                Create Website
-              </button>
+          {/* Subdomain */}
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5 font-medium uppercase tracking-wider">
+              Subdomain
+            </label>
+            <div className="flex items-center rounded-lg bg-[#1a1a1a] border border-white/10 overflow-hidden focus-within:border-blue-500">
+              <input
+                type="text"
+                value={form.subdomain}
+                onChange={e => setForm(f => ({ ...f, subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') }))}
+                placeholder="my-site"
+                required
+                disabled={creating}
+                className="flex-1 px-3 py-2.5 bg-transparent text-white text-sm placeholder-gray-600 focus:outline-none disabled:opacity-50"
+              />
+              <span className="px-3 py-2.5 text-sm text-gray-500 bg-white/5 border-l border-white/10 shrink-0">
+                .{process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || 'velocitysites.com.au'}
+              </span>
             </div>
           </div>
-        </div>
-      )}
+
+          {/* Prompt */}
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5 font-medium uppercase tracking-wider">
+              Describe Your Website
+            </label>
+            <textarea
+              value={form.prompt}
+              onChange={e => setForm(f => ({ ...f, prompt: e.target.value }))}
+              placeholder="A modern landing page for a personal fitness coaching business. Include a hero section with a strong headline, services offered, testimonials, and a contact form."
+              required
+              disabled={creating}
+              rows={4}
+              className="w-full px-3 py-2.5 rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-blue-500 resize-none disabled:opacity-50"
+            />
+          </div>
+
+          {/* AI Provider */}
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5 font-medium uppercase tracking-wider">
+              AI Provider
+            </label>
+            <select
+              value={form.provider}
+              onChange={e => setForm(f => ({ ...f, provider: e.target.value }))}
+              disabled={creating}
+              className="w-full px-3 py-2.5 rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm focus:outline-none focus:border-blue-500 disabled:opacity-50"
+            >
+              {PROVIDERS.map(p => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-600 mt-1">Uses your BYOK key if set, otherwise the platform key.</p>
+          </div>
+
+          {/* Token cost summary */}
+          <div className="p-3 rounded-lg bg-[#1a1a1a] border border-white/5 space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-400">Cost</span>
+              <span className="text-amber-400 font-bold">−{cost} tokens</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-400">Your balance</span>
+              <span className="text-white font-semibold">{balance?.toLocaleString() ?? '—'} tokens</span>
+            </div>
+            {balance !== null && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-400">After creation</span>
+                <span className={`font-semibold ${canAfford ? 'text-white' : 'text-red-400'}`}>
+                  {(balance - cost).toLocaleString()} tokens
+                </span>
+              </div>
+            )}
+          </div>
+
+          {!canAfford && (
+            <p className="text-xs text-red-400 text-center">
+              Not enough tokens. <a href="/dashboard/tokens" className="underline">Top up here.</a>
+            </p>
+          )}
+
+          {createError && (
+            <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+              {createError}
+            </p>
+          )}
+
+          <div className="flex gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={creating}
+              className="flex-1 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 font-medium text-sm transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!canAfford || creating || !form.name || !form.subdomain || !form.prompt}
+              className="flex-1 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-400 text-white font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {creating ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                  Generating...
+                </>
+              ) : (
+                'Generate Website'
+              )}
+            </button>
+          </div>
+        </form>
+
+        {creating && (
+          <p className="text-xs text-gray-500 text-center mt-3">
+            AI is building your site — this takes 15–30 seconds
+          </p>
+        )}
+      </div>
     </div>
   );
 }
