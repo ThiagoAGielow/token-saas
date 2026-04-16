@@ -1,0 +1,259 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// app/api/webhooks/stripe/route.js
+//
+// Handles incoming Stripe webhook events.
+// Uses raw body + Stripe-Signature header for signature verification.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const dynamic = 'force-dynamic'
+
+import Stripe from 'stripe'
+import type { SubscriptionPlan } from '@prisma/client'
+import type { NextRequest } from 'next/server'
+import { prisma } from '@/lib/db'
+import { grantTokens, processRollover, expireGrants } from '@/lib/tokens'
+import { resolveTokensFromPriceId, PLANS } from '@/lib/stripe'
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? '', {
+  apiVersion: '2024-04-10' as Stripe.LatestApiVersion,
+})
+
+// ─── POST ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Stripe sends all events here. We verify the signature and dispatch to
+ * the appropriate handler.
+ *
+ * @param {Request} request
+ */
+export async function POST(request: NextRequest) {
+  // ── Read raw body for signature verification ─────────────────────────────
+  const rawBody = await request.text()
+  const signature = request.headers.get('stripe-signature')
+
+  if (!signature) {
+    return new Response('Missing stripe-signature header', { status: 400 })
+  }
+
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+  if (!webhookSecret) {
+    return new Response('STRIPE_WEBHOOK_SECRET not configured', { status: 500 })
+  }
+
+  let event: Stripe.Event
+
+  try {
+    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[Stripe Webhook] Signature verification failed:', message)
+    return new Response(`Webhook Error: ${message}`, { status: 400 })
+  }
+
+  // ── Dispatch event ────────────────────────────────────────────────────────
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed':
+        await handleCheckoutCompleted(event.data.object)
+        break
+
+      case 'customer.subscription.updated':
+        // This fires on renewal — check if period changed
+        await handleSubscriptionRenewed(event.data.object)
+        break
+
+      case 'customer.subscription.deleted':
+        await handleSubscriptionDeleted(event.data.object)
+        break
+
+      default:
+        // Ignore unhandled events — return 200 to acknowledge receipt
+        break
+    }
+
+    return new Response(JSON.stringify({ received: true }), {
+      status:  200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`[Stripe Webhook] Error handling ${event.type}:`, error)
+    // Return 200 anyway — Stripe will retry on 5xx, not 4xx
+    return new Response(
+      JSON.stringify({ received: true, error: message }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    )
+  }
+}
+
+// ─── Event handlers ───────────────────────────────────────────────────────────
+
+/**
+ * checkout.session.completed
+ * Fired when a payment (pack) or subscription signup finishes.
+ *
+ * @param {Stripe.Checkout.Session} session
+ */
+async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+  const userId = session.metadata?.userId
+
+  if (!userId) {
+    console.warn('[Webhook] checkout.session.completed missing userId metadata')
+    return
+  }
+
+  const priceId = session.metadata?.priceId ?? session.line_items?.data?.[0]?.price?.id
+
+  if (!priceId) {
+    console.warn('[Webhook] checkout.session.completed: could not resolve priceId')
+    return
+  }
+
+  const resolved = resolveTokensFromPriceId(priceId)
+
+  if (!resolved) {
+    console.warn(`[Webhook] Unrecognised priceId: ${priceId}`)
+    return
+  }
+
+  if (session.mode === 'payment') {
+    // ── One-time token pack — tokens never expire ────────────────────────
+    await grantTokens(
+      userId,
+      resolved.tokens,
+      'TOPUP_PACK',
+      null, // no expiry
+      `Token pack purchase (${resolved.tokens} tokens)`
+    )
+  } else if (session.mode === 'subscription') {
+    // ── New subscription — tokens expire at end of billing period ────────
+    const stripeSubscriptionId =
+      typeof session.subscription === 'string'
+        ? session.subscription
+        : session.subscription?.id
+    if (!stripeSubscriptionId) {
+      console.warn('[Webhook] checkout.session.completed: missing subscription id')
+      return
+    }
+
+    // Fetch the subscription to get current period dates
+    const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId) as Stripe.Subscription & {
+      current_period_start: number
+      current_period_end:   number
+    }
+    const expiresAt = new Date(subscription.current_period_end * 1000)
+
+    await grantTokens(
+      userId,
+      resolved.tokens,
+      'MONTHLY_PLAN',
+      expiresAt,
+      `${resolved.plan} plan — monthly token grant`
+    )
+
+    // Upsert subscription record in DB
+    const planKey = resolved.plan as SubscriptionPlan
+
+    await prisma.subscription.upsert({
+      where:  { stripeSubscriptionId },
+      update: {
+        status:              subscription.status,
+        currentPeriodStart:  new Date(subscription.current_period_start * 1000),
+        currentPeriodEnd:    expiresAt,
+        updatedAt:           new Date(),
+      },
+      create: {
+        userId,
+        stripeSubscriptionId,
+        stripePriceId:       priceId,
+        plan:                planKey,
+        status:              subscription.status,
+        currentPeriodStart:  new Date(subscription.current_period_start * 1000),
+        currentPeriodEnd:    expiresAt,
+        monthlyTokens:       resolved.tokens,
+      },
+    })
+  }
+}
+
+/**
+ * customer.subscription.updated
+ * Fires on every change — we only care about period renewals.
+ *
+ * @param {Stripe.Subscription} subscription
+ */
+async function handleSubscriptionRenewed(subscription: Stripe.Subscription) {
+  const sub = subscription as Stripe.Subscription & {
+    current_period_start: number
+    current_period_end:   number
+  }
+  const customerId = sub.customer
+
+  // Find userId via customer metadata
+  const customer = await stripe.customers.retrieve(
+    typeof customerId === 'string' ? customerId : customerId.id
+  )
+
+  if ((customer as Stripe.DeletedCustomer).deleted) return
+
+  const userId = (customer as Stripe.Customer).metadata?.userId
+
+  if (!userId) {
+    console.warn('[Webhook] subscription.updated: customer has no userId metadata')
+    return
+  }
+
+  const dbSub = await prisma.subscription.findUnique({
+    where: { stripeSubscriptionId: sub.id },
+  })
+
+  if (!dbSub) return
+
+  const newPeriodEnd   = new Date(sub.current_period_end   * 1000)
+  const newPeriodStart = new Date(sub.current_period_start * 1000)
+
+  // Detect an actual period renewal (period_start moved forward)
+  const isRenewal = newPeriodStart > dbSub.currentPeriodStart
+
+  if (isRenewal) {
+    // 1. Expire any remaining tokens from last period AFTER rolling some over
+    await processRollover(userId)
+    await expireGrants(userId)
+
+    // 2. Grant fresh tokens for the new period
+    await grantTokens(
+      userId,
+      dbSub.monthlyTokens,
+      'MONTHLY_PLAN',
+      newPeriodEnd,
+      `${dbSub.plan} plan — monthly renewal grant`
+    )
+  }
+
+  // Always keep subscription record current
+  await prisma.subscription.update({
+    where: { stripeSubscriptionId: sub.id },
+    data:  {
+      status:             sub.status,
+      currentPeriodStart: newPeriodStart,
+      currentPeriodEnd:   newPeriodEnd,
+      updatedAt:          new Date(),
+    },
+  })
+}
+
+/**
+ * customer.subscription.deleted
+ * Subscription was cancelled (immediately or at period end).
+ *
+ * @param {Stripe.Subscription} subscription
+ */
+async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+  await prisma.subscription.updateMany({
+    where: { stripeSubscriptionId: subscription.id },
+    data:  {
+      status:    'canceled',
+      updatedAt: new Date(),
+    },
+  })
+}
