@@ -152,7 +152,7 @@ export default function DashboardLayout({ children }) {
   };
 
   return (
-    <div className="flex h-screen bg-[#0a0a0a] text-white overflow-hidden">
+    <div className="flex h-screen bg-[#0a0a0a] text-white overflow-hidden" style={{ minWidth: '900px' }}>
       <OnboardingModal />
 
       {/* Sidebar */}
@@ -228,7 +228,7 @@ export default function DashboardLayout({ children }) {
       </aside>
 
       {/* Main content area */}
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden" style={{ minWidth: 0 }}>
         {/* Top bar */}
         <header className="flex items-center justify-between px-6 h-16 border-b border-white/10 bg-[#0a0a0a] flex-shrink-0">
           <div className="flex items-center gap-3">

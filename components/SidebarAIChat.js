@@ -226,12 +226,15 @@ export default function SidebarAIChat() {
 
       {/* ── Drawer ───────────────────────────────────────────────────────────── */}
       <div
-        className={`fixed top-0 bottom-0 z-50 flex flex-col bg-[#0f0f0f] shadow-2xl transition-transform duration-300 ease-in-out`}
+        className={`fixed top-0 bottom-0 z-50 flex flex-col bg-[#0f0f0f] shadow-2xl transition-all duration-300 ease-in-out ${
+          isOpen
+            ? 'opacity-100 pointer-events-auto translate-x-0'
+            : 'opacity-0 pointer-events-none -translate-x-4'
+        }`}
         style={{
-          left:      '240px',
-          width:     '380px',
+          left:       '240px',
+          width:      '380px',
           borderLeft: '1px solid rgba(255,255,255,0.08)',
-          transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
         }}
       >
         {/* Header */}
