@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation';
 import TokenBalance from '@/components/TokenBalance';
 import OnboardingModal from '@/components/OnboardingModal';
 import SidebarAIChat from '@/components/SidebarAIChat';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
+import { LanguageProvider, useLanguage } from '@/contexts/LanguageContext';
 
 // TODO: replace with real data from API/context
 const MOCK_USER = {
@@ -92,23 +94,19 @@ function IcoAgency() {
 }
 
 const NAV_ITEMS = [
-  { label: 'Overview',  href: '/dashboard',           icon: <IcoOverview />,  exact: true },
-  { label: 'Websites',  href: '/dashboard/websites',  icon: <IcoWebsites />,  badge: '3' },
-  { label: 'Domains',   href: '/dashboard/domains',   icon: <IcoDomains />,   badge: '2' },
-  { label: 'Emails',    href: '/dashboard/emails',    icon: <IcoEmails />,    badge: '5' },
-  { label: 'Agency',    href: '/dashboard/agency',    icon: <IcoAgency /> },
-  { label: 'API Keys',  href: '/dashboard/api-keys',  icon: <IcoApiKeys /> },
-  { label: 'Usage',     href: '/dashboard/usage',     icon: <IcoUsage /> },
-  { label: 'Settings',  href: '/dashboard/settings',  icon: <IcoSettings /> },
+  { labelKey: 'nav_overview',  href: '/dashboard',           icon: <IcoOverview />,  exact: true },
+  { labelKey: 'nav_websites',  href: '/dashboard/websites',  icon: <IcoWebsites />,  badge: '3' },
+  { labelKey: 'nav_domains',   href: '/dashboard/domains',   icon: <IcoDomains />,   badge: '2' },
+  { labelKey: 'nav_emails',    href: '/dashboard/emails',    icon: <IcoEmails />,    badge: '5' },
+  { labelKey: 'nav_agency',    href: '/dashboard/agency',    icon: <IcoAgency /> },
+  { labelKey: 'nav_apiKeys',   href: '/dashboard/api-keys',  icon: <IcoApiKeys /> },
+  { labelKey: 'nav_usage',     href: '/dashboard/usage',     icon: <IcoUsage /> },
+  { labelKey: 'nav_settings',  href: '/dashboard/settings',  icon: <IcoSettings /> },
 ];
 
-const BUY_TOKENS_ITEM = {
-  label: 'Buy Tokens',
-  href: '/dashboard/tokens',
-  icon: <IcoCoin />,
-};
+const BUY_TOKENS_HREF = '/dashboard/tokens';
 
-function NavItem({ item, pathname }) {
+function NavItem({ item, pathname, t }) {
   const isActive = item.exact
     ? pathname === item.href
     : pathname.startsWith(item.href);
@@ -125,7 +123,7 @@ function NavItem({ item, pathname }) {
       <span className={`flex-shrink-0 transition-colors ${isActive ? 'text-blue-400' : 'text-gray-500 group-hover:text-gray-300'}`}>
         {item.icon}
       </span>
-      <span className="flex-1">{item.label}</span>
+      <span className="flex-1">{t(item.labelKey)}</span>
       {item.badge && (
         <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${isActive ? 'bg-blue-500/20 text-blue-300' : 'bg-white/10 text-gray-400'}`}>
           {item.badge}
@@ -135,20 +133,23 @@ function NavItem({ item, pathname }) {
   );
 }
 
-export default function DashboardLayout({ children }) {
+// ─── Inner layout (needs access to LanguageContext) ───────────────────────────
+
+function DashboardInner({ children }) {
   const pathname = usePathname();
+  const { t }    = useLanguage();
 
   const getPageTitle = () => {
-    if (pathname === '/dashboard') return 'Overview';
-    if (pathname.startsWith('/dashboard/websites')) return 'Websites';
-    if (pathname.startsWith('/dashboard/domains')) return 'Domains';
-    if (pathname.startsWith('/dashboard/emails')) return 'Emails';
-    if (pathname.startsWith('/dashboard/api-keys')) return 'API Keys';
-    if (pathname.startsWith('/dashboard/usage')) return 'Usage & Analytics';
-    if (pathname.startsWith('/dashboard/tokens')) return 'Buy Tokens';
-    if (pathname.startsWith('/dashboard/settings')) return 'Settings';
-    if (pathname.startsWith('/dashboard/agency')) return 'Agency Portal';
-    return 'Dashboard';
+    if (pathname === '/dashboard')                       return t('page_overview');
+    if (pathname.startsWith('/dashboard/websites'))      return t('page_websites');
+    if (pathname.startsWith('/dashboard/domains'))       return t('page_domains');
+    if (pathname.startsWith('/dashboard/emails'))        return t('page_emails');
+    if (pathname.startsWith('/dashboard/api-keys'))      return t('page_apiKeys');
+    if (pathname.startsWith('/dashboard/usage'))         return t('page_usage');
+    if (pathname.startsWith('/dashboard/tokens'))        return t('page_buyTokens');
+    if (pathname.startsWith('/dashboard/settings'))      return t('page_settings');
+    if (pathname.startsWith('/dashboard/agency'))        return t('page_agency');
+    return t('page_dashboard');
   };
 
   return (
@@ -177,22 +178,22 @@ export default function DashboardLayout({ children }) {
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
           {NAV_ITEMS.map((item) => (
-            <NavItem key={item.href} item={item} pathname={pathname} />
+            <NavItem key={item.href} item={item} pathname={pathname} t={t} />
           ))}
 
           <div className="my-3 border-t border-white/10" />
 
           {/* Buy Tokens - highlighted */}
           <Link
-            href={BUY_TOKENS_ITEM.href}
+            href={BUY_TOKENS_HREF}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 group border ${
               pathname.startsWith('/dashboard/tokens')
                 ? 'bg-amber-400/15 text-amber-300 border-amber-400/30'
                 : 'text-amber-400 hover:bg-amber-400/10 border-amber-400/20 hover:border-amber-400/30'
             }`}
           >
-            <span className="text-amber-400 flex-shrink-0">{BUY_TOKENS_ITEM.icon}</span>
-            <span>{BUY_TOKENS_ITEM.label}</span>
+            <span className="text-amber-400 flex-shrink-0"><IcoCoin /></span>
+            <span>{t('nav_buyTokens')}</span>
           </Link>
 
           {/* AI Assistant */}
@@ -236,6 +237,9 @@ export default function DashboardLayout({ children }) {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Language switcher */}
+            <LanguageSwitcher />
+
             {/* Notification bell */}
             <button
               className="relative rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/5 transition-colors border border-transparent hover:border-white/10"
@@ -271,5 +275,15 @@ export default function DashboardLayout({ children }) {
         </main>
       </div>
     </div>
+  );
+}
+
+// ─── Outer layout — wraps with LanguageProvider ───────────────────────────────
+
+export default function DashboardLayout({ children }) {
+  return (
+    <LanguageProvider>
+      <DashboardInner>{children}</DashboardInner>
+    </LanguageProvider>
   );
 }
