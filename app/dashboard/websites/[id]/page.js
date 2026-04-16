@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, use } from 'react';
 import Link from 'next/link';
 
 const PLATFORM_DOMAIN = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || 'velocitysites.com.au';
@@ -18,7 +18,7 @@ function displayContent(content) {
 }
 
 export default function WebsiteChatPage({ params }) {
-  const { id } = params;
+  const { id } = use(params);
 
   const [website,    setWebsite]    = useState(null);
   const [messages,   setMessages]   = useState([]);
