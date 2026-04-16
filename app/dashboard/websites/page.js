@@ -312,9 +312,12 @@ export default function WebsitesPage() {
                 >
                   Preview
                 </a>
-                <button className="flex-1 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-xs text-blue-400 font-medium transition-colors">
+                <Link
+                  href={`/dashboard/websites/${site.id}`}
+                  className="flex-1 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-xs text-blue-400 font-medium transition-colors text-center"
+                >
                   Edit
-                </button>
+                </Link>
               </div>
             </div>
           </div>

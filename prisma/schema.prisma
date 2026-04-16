@@ -257,10 +257,31 @@ model Website {
   updatedAt     DateTime      @updatedAt
 
   domain        Domain?
+  chatMessages  ChatMessage[]
 
   @@index([userId])
   @@index([subdomain])
   @@index([userId, status])
+}
+
+// ─── Chat Message ─────────────────────────────────────────────────────────────
+
+/// Stores the conversation history between a user and the AI assistant per site.
+model ChatMessage {
+  id        String   @id @default(cuid())
+  websiteId String
+  website   Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  /// 'user' | 'assistant'
+  role      String
+
+  /// Full message text (may be long for assistant messages containing HTML)
+  content   String   @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([websiteId])
+  @@index([websiteId, createdAt])
 }
 
 // ─── Domain ───────────────────────────────────────────────────────────────────
