@@ -1,533 +1,237 @@
-'use client';
+// ─────────────────────────────────────────────────────────────────────────────
+// app/api/websites/route.js
+//
+// GET  /api/websites — list the authenticated user's websites
+// POST /api/websites — generate a new AI website (costs 50 tokens)
+// ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect } from 'react';
+export const dynamic = 'force-dynamic'
 
-const PLATFORM_DOMAIN = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || 'velocitysites.com.au';
-const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
+import { auth }           from '@clerk/nextjs/server'
+import { NextResponse, type NextRequest } from 'next/server'
+import { prisma }         from '@/lib/db'
+import { getOrCreateUser } from '@/lib/user'
+import { spendTokens, getBalance, TOKEN_COSTS } from '@/lib/tokens'
+import { callAI }             from '@/lib/ai'
+import { provisionSiteRepo }   from '@/lib/github'
+import { createVercelProject } from '@/lib/vercel'
 
-type Site = { id: string; name: string; subdomain: string; status: string };
-type CustomDomain = { id: string; domain: string; verified: boolean; verificationToken: string };
-type Availability = null | 'checking' | { available: boolean; reason?: string };
-type VerifyResult = { verified: boolean; message?: string };
-
-function useDebounce<T>(value: T, delay: number): T {
-  const [debounced, setDebounced] = useState<T>(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(t);
-  }, [value, delay]);
-  return debounced;
+type CreateWebsiteBody = {
+  name?: string
+  subdomain?: string
+  prompt?: string
+  provider?: string
 }
 
-export default function DomainsPage() {
-  const [sites, setSites]               = useState<Site[]>([]);
-  const [loading, setLoading]           = useState(true);
-  const [showForm, setShowForm]         = useState(false);
-  const [subdomain, setSubdomain]       = useState('');
-  const [siteName, setSiteName]         = useState('');
-  const [availability, setAvailability] = useState<Availability>(null);
-  const [claiming, setClaiming]         = useState(false);
-  const [error, setError]               = useState<string | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+const SUBDOMAIN_RE = /^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/
 
-  const debouncedSubdomain = useDebounce(subdomain, 400);
+const WEBSITE_SYSTEM_PROMPT = `You are an expert web designer and developer.
+Generate a complete, self-contained HTML file for a website based on the user's description.
 
-  // Load claimed subdomains
-  useEffect(() => {
-    fetch('/api/websites')
-      .then((r) => r.json())
-      .then((d) => setSites(d.websites || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+Rules:
+- Output ONLY raw HTML — no markdown fences, no explanation, no commentary
+- Single HTML file with everything inline (styles in <style> tags, no external CSS files)
+- Use Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"></script>
+- Modern, clean, professional design with a dark or light theme that fits the business
+- Fully mobile responsive
+- Include realistic placeholder content (headings, body copy, CTAs) relevant to the business
+- Use https://picsum.photos for placeholder images where appropriate
+- Include a navigation bar, hero section, and at least 2 other relevant sections
+- Add a simple footer with the business name
+- Do NOT include any JavaScript beyond what Tailwind CDN provides`
 
-  // Check availability as user types
-  useEffect(() => {
-    const name = debouncedSubdomain.toLowerCase().trim();
-    if (!name) { setAvailability(null); return; }
-    if (!SUBDOMAIN_RE.test(name)) {
-      setAvailability({ available: false, reason: 'Only letters, numbers, and hyphens' });
-      return;
+// ─── GET /api/websites ────────────────────────────────────────────────────────
+
+export async function GET() {
+  try {
+    const { userId: clerkId } = await auth()
+    if (!clerkId) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+
+    const user = await getOrCreateUser(clerkId)
+
+    const websites = await prisma.website.findMany({
+      where:   { userId: user.id },
+      select: {
+        id:              true,
+        name:            true,
+        subdomain:       true,
+        status:          true,
+        tokenCost:       true,
+        prompt:          true,
+        githubRepo:      true,
+        githubRepoUrl:   true,
+        vercelProjectId: true,
+        vercelUrl:       true,
+        publishedAt:     true,
+        createdAt:       true,
+        updatedAt:       true,
+        domain: {
+          select: { domain: true, verified: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    return NextResponse.json({ websites })
+  } catch (error) {
+    console.error('[GET /api/websites]', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+// ─── POST /api/websites ───────────────────────────────────────────────────────
+
+export async function POST(request: NextRequest) {
+  try {
+    const { userId: clerkId } = await auth()
+    if (!clerkId) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+
+    const body = (await request.json()) as CreateWebsiteBody
+    const { name, subdomain, prompt, provider = 'claude' } = body
+
+    // ── Validate input ─────────────────────────────────────────────────────
+    if (!name?.trim())      return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+    if (!subdomain?.trim()) return NextResponse.json({ error: 'Subdomain is required' }, { status: 400 })
+    if (!prompt?.trim())    return NextResponse.json({ error: 'Prompt is required' }, { status: 400 })
+
+    const cleanSubdomain = subdomain.trim().toLowerCase()
+    if (!SUBDOMAIN_RE.test(cleanSubdomain)) {
+      return NextResponse.json(
+        { error: 'Subdomain must be 3–50 lowercase letters, numbers, or hyphens' },
+        { status: 400 }
+      )
     }
-    setAvailability('checking');
-    fetch(`/api/subdomains?name=${encodeURIComponent(name)}`)
-      .then((r) => r.json())
-      .then((d) => setAvailability(d))
-      .catch(() => setAvailability(null));
-  }, [debouncedSubdomain]);
 
-  const handleClaim = async () => {
-    setError(null);
-    setClaiming(true);
-    try {
-      const res = await fetch('/api/subdomains', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ subdomain: subdomain.toLowerCase().trim(), siteName }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to claim subdomain');
-      setSites((prev) => [data.website, ...prev]);
-      setShowForm(false);
-      setSubdomain('');
-      setSiteName('');
-      setAvailability(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setClaiming(false);
+    // ── Resolve user ───────────────────────────────────────────────────────
+    const user = await getOrCreateUser(clerkId)
+
+    // ── Check subdomain availability ───────────────────────────────────────
+    const existing = await prisma.website.findUnique({
+      where:  { subdomain: cleanSubdomain },
+      select: { id: true },
+    })
+    if (existing) {
+      return NextResponse.json({ error: 'That subdomain is already taken' }, { status: 409 })
     }
-  };
 
-  const handleDelete = async (id: string) => {
-    try {
-      await fetch(`/api/subdomains?id=${id}`, { method: 'DELETE' });
-      setSites((prev) => prev.filter((s) => s.id !== id));
-      setDeleteConfirm(null);
-    } catch {
-      setError('Failed to remove site');
+    // ── Check balance ──────────────────────────────────────────────────────
+    const cost    = TOKEN_COSTS.WEBSITE
+    const balance = await getBalance(user.id)
+    if (balance < cost) {
+      return NextResponse.json(
+        { error: 'Insufficient tokens', required: cost, balance },
+        { status: 402 }
+      )
     }
-  };
 
-  // ── Custom domain state ────────────────────────────────────────────────────
-  const [customDomains, setCustomDomains]     = useState<CustomDomain[]>([]);
-  const [cdLoading, setCdLoading]             = useState(true);
-  const [showCdForm, setShowCdForm]           = useState(false);
-  const [cdInput, setCdInput]                 = useState('');
-  const [cdAdding, setCdAdding]               = useState(false);
-  const [cdError, setCdError]                 = useState<string | null>(null);
-  const [verifying, setVerifying]             = useState<string | null>(null); // domain id being verified
-  const [verifyResult, setVerifyResult]       = useState<Record<string, VerifyResult>>({}); // id → result
-  const [cdDeleteConfirm, setCdDeleteConfirm] = useState<string | null>(null);
-  const [copiedToken, setCopiedToken]         = useState<string | null>(null);
+    // ── Create website record (BUILDING) ───────────────────────────────────
+    const website = await prisma.website.create({
+      data: {
+        userId:    user.id,
+        name:      name.trim(),
+        subdomain: cleanSubdomain,
+        prompt:    prompt.trim(),
+        status:    'BUILDING',
+        tokenCost: cost,
+      },
+    })
 
-  useEffect(() => {
-    fetch('/api/domains')
-      .then((r) => r.json())
-      .then((d) => setCustomDomains(d.domains || []))
-      .catch(() => {})
-      .finally(() => setCdLoading(false));
-  }, []);
+    // ── Spend tokens ───────────────────────────────────────────────────────
+    await spendTokens(
+      user.id,
+      cost,
+      `Built website: ${name.trim()}`,
+      { websiteId: website.id }
+    )
 
-  const handleAddDomain = async () => {
-    setCdError(null);
-    setCdAdding(true);
+    // ── Generate HTML via AI ───────────────────────────────────────────────
+    let generatedHtml: string
     try {
-      const res = await fetch('/api/domains', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ domain: cdInput }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to add domain');
-      setCustomDomains((prev) => [data.domain, ...prev]);
-      setShowCdForm(false);
-      setCdInput('');
-    } catch (err) {
-      setCdError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setCdAdding(false);
+      generatedHtml = await callAI({
+        userId:   user.id,
+        provider,
+        system:   WEBSITE_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: prompt.trim() }],
+        maxTokens: 8192,
+      })
+
+      // Strip any accidental markdown fences the model might add
+      generatedHtml = generatedHtml
+        .replace(/^```html\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/```\s*$/i, '')
+        .trim()
+    } catch (aiError) {
+      console.error('[POST /api/websites] AI generation failed:', aiError)
+      // Mark as BUILDING so the user can retry — tokens already spent
+      return NextResponse.json(
+        { error: 'AI generation failed. Your tokens have been held — please contact support.', websiteId: website.id },
+        { status: 502 }
+      )
     }
-  };
 
-  const handleVerify = async (id: string) => {
-    setVerifying(id);
+    // ── Provision GitHub repo ──────────────────────────────────────────────
+    let githubRepo:    string | null = null
+    let githubRepoUrl: string | null = null
     try {
-      const res = await fetch('/api/domains/verify', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ id }),
-      });
-      const data = await res.json();
-      setVerifyResult((prev) => ({ ...prev, [id]: data }));
-      if (data.verified) {
-        setCustomDomains((prev) =>
-          prev.map((d) => d.id === id ? { ...d, verified: true } : d)
-        );
+      const gh = await provisionSiteRepo({
+        name:          name.trim(),
+        subdomain:     cleanSubdomain,
+        generatedHtml,
+      })
+      githubRepo    = gh.repoName
+      githubRepoUrl = gh.repoUrl
+    } catch (ghError) {
+      // GitHub failure is non-fatal — site still works via subdomain from DB
+      console.error('[POST /api/websites] GitHub provisioning failed:', ghError)
+    }
+
+    // ── Provision Vercel project ───────────────────────────────────────────
+    let vercelProjectId: string | null = null
+    let vercelUrl:       string | null = null
+    if (githubRepo) {
+      try {
+        const vp = await createVercelProject({
+          repoName: githubRepo,
+          siteName: name.trim(),
+        })
+        vercelProjectId = vp.projectId
+        vercelUrl       = vp.vercelUrl
+      } catch (vcError) {
+        // Vercel failure is non-fatal — GitHub repo + subdomain still work
+        console.error('[POST /api/websites] Vercel project creation failed:', vcError)
       }
-    } catch {
-      setVerifyResult((prev) => ({ ...prev, [id]: { verified: false, message: 'Check failed' } }));
-    } finally {
-      setVerifying(null);
     }
-  };
 
-  const handleDeleteDomain = async (id: string) => {
-    try {
-      await fetch(`/api/domains?id=${id}`, { method: 'DELETE' });
-      setCustomDomains((prev) => prev.filter((d) => d.id !== id));
-      setCdDeleteConfirm(null);
-    } catch {
-      setCdError('Failed to remove domain');
-    }
-  };
+    // ── Save HTML + mark DRAFT (user must explicitly publish) ─────────────
+    const updated = await prisma.website.update({
+      where: { id: website.id },
+      data:  {
+        generatedHtml,
+        status:       'DRAFT',
+        publishedAt:  null,
+        ...(githubRepo      ? { githubRepo }      : {}),
+        ...(githubRepoUrl   ? { githubRepoUrl }   : {}),
+        ...(vercelProjectId ? { vercelProjectId } : {}),
+        ...(vercelUrl       ? { vercelUrl }       : {}),
+      },
+      select: {
+        id:          true,
+        name:        true,
+        subdomain:   true,
+        status:      true,
+        tokenCost:   true,
+        prompt:      true,
+        publishedAt: true,
+        createdAt:   true,
+        updatedAt:   true,
+        domain:      { select: { domain: true, verified: true } },
+      },
+    })
 
-  const copyToken = (token: string, id: string) => {
-    navigator.clipboard.writeText(token);
-    setCopiedToken(id);
-    setTimeout(() => setCopiedToken(null), 2000);
-  };
-
-  const PLATFORM_CNAME = `cname.vercel-dns.com`;
-
-  const isValid = subdomain.trim().length > 0 &&
-    SUBDOMAIN_RE.test(subdomain.trim()) &&
-    typeof availability === 'object' && availability?.available === true;
-
-  return (
-    <div className="max-w-4xl space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-white">Your Sites</h2>
-          <p className="text-sm text-gray-400 mt-0.5">
-            {loading ? '...' : `${sites.length} site${sites.length !== 1 ? 's' : ''}`} · subdomains on {PLATFORM_DOMAIN}
-          </p>
-        </div>
-        <button
-          onClick={() => { setShowForm(!showForm); setError(null); }}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-400 text-white font-semibold text-sm transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Claim Subdomain
-        </button>
-      </div>
-
-      {/* Claim form */}
-      {showForm && (
-        <div className="p-5 rounded-xl bg-[#111] border border-blue-500/20 space-y-4">
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-white">Claim a Subdomain</h3>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-400/10 text-amber-400 border border-amber-400/20">
-              {20} tokens
-            </span>
-          </div>
-
-          {/* Subdomain input */}
-          <div>
-            <label className="block text-xs text-gray-400 mb-1.5 font-medium uppercase tracking-wider">
-              Subdomain
-            </label>
-            <div className="flex items-center rounded-lg bg-[#1a1a1a] border border-white/10 overflow-hidden focus-within:border-blue-500 transition-colors">
-              <input
-                type="text"
-                value={subdomain}
-                onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                placeholder="myshop"
-                className="flex-1 px-3 py-2.5 bg-transparent text-white text-sm placeholder-gray-600 focus:outline-none"
-              />
-              <span className="px-3 py-2.5 text-gray-500 text-sm border-l border-white/10 whitespace-nowrap">
-                .{PLATFORM_DOMAIN}
-              </span>
-            </div>
-
-            {/* Availability indicator */}
-            {subdomain && (
-              <div className="mt-2 flex items-center gap-1.5 text-xs">
-                {availability === 'checking' && (
-                  <span className="text-gray-500">Checking availability...</span>
-                )}
-                {typeof availability === 'object' && availability?.available === true && (
-                  <>
-                    <svg className="w-3.5 h-3.5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span className="text-green-400 font-medium">{subdomain}.{PLATFORM_DOMAIN} is available</span>
-                  </>
-                )}
-                {typeof availability === 'object' && availability?.available === false && (
-                  <>
-                    <svg className="w-3.5 h-3.5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    <span className="text-red-400">{availability.reason || 'Already taken'}</span>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Site name */}
-          <div>
-            <label className="block text-xs text-gray-400 mb-1.5 font-medium uppercase tracking-wider">
-              Site Name <span className="text-gray-600 normal-case">(optional)</span>
-            </label>
-            <input
-              type="text"
-              value={siteName}
-              onChange={(e) => setSiteName(e.target.value)}
-              placeholder={subdomain || 'My Website'}
-              className="w-full px-3 py-2.5 rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors"
-            />
-          </div>
-
-          {error && <p className="text-sm text-red-400">{error}</p>}
-
-          <div className="flex gap-2 pt-1">
-            <button
-              onClick={() => { setShowForm(false); setSubdomain(''); setSiteName(''); setError(null); setAvailability(null); }}
-              className="flex-1 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 text-sm font-medium transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleClaim}
-              disabled={!isValid || claiming}
-              className="flex-1 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold transition-colors disabled:opacity-40"
-            >
-              {claiming ? 'Claiming...' : `Claim ${subdomain || 'Subdomain'} (−20 tokens)`}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Sites list */}
-      <div className="rounded-xl bg-[#111] border border-white/10 overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-16 text-gray-500 text-sm">Loading...</div>
-        ) : sites.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16">
-            <div className="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center text-3xl mb-4">🌐</div>
-            <h3 className="text-lg font-bold text-white mb-1">No sites yet</h3>
-            <p className="text-gray-400 text-sm text-center max-w-xs mb-1">
-              Claim a subdomain to get your site live in seconds.
-            </p>
-            <p className="text-amber-400 font-semibold text-sm">20 tokens per site</p>
-          </div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-white/10">
-                <th className="text-left px-5 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Site</th>
-                <th className="text-left px-5 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">URL</th>
-                <th className="text-left px-5 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Status</th>
-                <th className="text-right px-5 py-3 text-xs text-gray-500 uppercase tracking-wider font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sites.map((site, i) => (
-                <tr key={site.id} className={`${i < sites.length - 1 ? 'border-b border-white/5' : ''} hover:bg-white/2 transition-colors`}>
-                  <td className="px-5 py-4">
-                    <p className="font-medium text-white">{site.name}</p>
-                    <p className="text-xs text-gray-500">{site.subdomain}</p>
-                  </td>
-                  <td className="px-5 py-4">
-                    <a
-                      href={`https://${site.subdomain}.${PLATFORM_DOMAIN}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-400 hover:text-blue-300 text-xs font-mono transition-colors"
-                    >
-                      {site.subdomain}.{PLATFORM_DOMAIN} ↗
-                    </a>
-                  </td>
-                  <td className="px-5 py-4">
-                    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${
-                      site.status === 'ACTIVE'
-                        ? 'bg-green-500/15 text-green-400 border-green-500/25'
-                        : 'bg-yellow-500/15 text-yellow-400 border-yellow-500/25'
-                    }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${site.status === 'ACTIVE' ? 'bg-green-400' : 'bg-yellow-400'}`} />
-                      {site.status === 'ACTIVE' ? 'Live' : 'Building'}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    {deleteConfirm === site.id ? (
-                      <div className="flex items-center justify-end gap-1.5">
-                        <span className="text-xs text-red-400">Remove?</span>
-                        <button
-                          onClick={() => handleDelete(site.id)}
-                          className="text-xs px-2.5 py-1 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-colors"
-                        >
-                          Yes
-                        </button>
-                        <button
-                          onClick={() => setDeleteConfirm(null)}
-                          className="text-xs px-2.5 py-1 rounded-lg bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10 transition-colors"
-                        >
-                          No
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setDeleteConfirm(site.id)}
-                        className="text-xs px-2.5 py-1 rounded-lg bg-white/5 text-gray-400 border border-white/10 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 transition-all"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {/* ── Custom Domains ─────────────────────────────────────────────── */}
-      <div className="border-t border-white/10 pt-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-lg font-bold text-white">Custom Domains</h2>
-            <p className="text-sm text-gray-400 mt-0.5">Connect your own domain (e.g. myshop.com)</p>
-          </div>
-          <button
-            onClick={() => { setShowCdForm(!showCdForm); setCdError(null); }}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white font-semibold text-sm transition-colors border border-white/10"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Domain
-          </button>
-        </div>
-
-        {/* Add domain form */}
-        {showCdForm && (
-          <div className="p-5 rounded-xl bg-[#111] border border-white/20 space-y-4 mb-4">
-            <h3 className="font-semibold text-white text-sm">Add a custom domain</h3>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1.5 font-medium uppercase tracking-wider">Domain</label>
-              <input
-                type="text"
-                value={cdInput}
-                onChange={(e) => setCdInput(e.target.value)}
-                placeholder="myshop.com"
-                className="w-full px-3 py-2.5 rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors"
-              />
-              <p className="text-xs text-gray-500 mt-1.5">Enter your root domain without www (e.g. myshop.com)</p>
-            </div>
-            {cdError && <p className="text-sm text-red-400">{cdError}</p>}
-            <div className="flex gap-2">
-              <button
-                onClick={() => { setShowCdForm(false); setCdInput(''); setCdError(null); }}
-                className="flex-1 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 text-sm font-medium transition-colors"
-              >Cancel</button>
-              <button
-                onClick={handleAddDomain}
-                disabled={!cdInput.trim() || cdAdding}
-                className="flex-1 py-2.5 rounded-lg bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold transition-colors disabled:opacity-40"
-              >{cdAdding ? 'Adding...' : 'Add Domain'}</button>
-            </div>
-          </div>
-        )}
-
-        {/* Custom domains list */}
-        {cdLoading ? (
-          <div className="text-sm text-gray-500 py-4">Loading...</div>
-        ) : customDomains.length === 0 ? (
-          <div className="p-6 rounded-xl bg-[#111] border border-white/10 text-center">
-            <p className="text-gray-500 text-sm">No custom domains yet.</p>
-            <p className="text-gray-600 text-xs mt-1">Add your own domain to use it instead of a subdomain.</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {customDomains.map((d) => (
-              <div key={d.id} className={`p-4 rounded-xl border ${d.verified ? 'bg-green-500/5 border-green-500/20' : 'bg-[#111] border-white/10'}`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="font-semibold text-white text-sm">{d.domain}</p>
-                      {d.verified ? (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 font-semibold">Verified ✓</span>
-                      ) : (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/25 font-semibold">Pending</span>
-                      )}
-                    </div>
-
-                    {/* Verification instructions */}
-                    {!d.verified && (
-                      <div className="mt-3 space-y-3">
-                        <div className="p-3 rounded-lg bg-[#1a1a1a] border border-white/10">
-                          <p className="text-xs font-semibold text-gray-300 mb-2">Step 1 — Add this TXT record to your DNS:</p>
-                          <div className="space-y-1.5 font-mono text-xs">
-                            <div className="flex items-center gap-2">
-                              <span className="text-gray-500 w-16 flex-shrink-0">Name</span>
-                              <span className="text-blue-300">_velocitysites-verify.{d.domain}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-gray-500 w-16 flex-shrink-0">Type</span>
-                              <span className="text-gray-300">TXT</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-gray-500 w-16 flex-shrink-0">Value</span>
-                              <span className="text-amber-300 break-all">{d.verificationToken}</span>
-                              <button
-                                onClick={() => copyToken(d.verificationToken, d.id)}
-                                className="ml-auto flex-shrink-0 text-xs px-2 py-0.5 rounded bg-white/10 hover:bg-white/15 text-gray-300 transition-colors"
-                              >{copiedToken === d.id ? '✓' : 'Copy'}</button>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="p-3 rounded-lg bg-[#1a1a1a] border border-white/10">
-                          <p className="text-xs font-semibold text-gray-300 mb-2">Step 2 — Point your domain to us:</p>
-                          <div className="space-y-1.5 font-mono text-xs">
-                            <div className="flex items-center gap-2">
-                              <span className="text-gray-500 w-16 flex-shrink-0">Name</span>
-                              <span className="text-blue-300">www</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-gray-500 w-16 flex-shrink-0">Type</span>
-                              <span className="text-gray-300">CNAME</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-gray-500 w-16 flex-shrink-0">Value</span>
-                              <span className="text-amber-300">{PLATFORM_CNAME}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {verifyResult[d.id] && !verifyResult[d.id].verified && (
-                          <p className="text-xs text-yellow-400">{verifyResult[d.id].message}</p>
-                        )}
-
-                        <button
-                          onClick={() => handleVerify(d.id)}
-                          disabled={verifying === d.id}
-                          className="w-full py-2 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 text-sm font-semibold transition-colors disabled:opacity-50"
-                        >
-                          {verifying === d.id ? 'Checking DNS...' : 'Verify Domain'}
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Verified — show live domain */}
-                    {d.verified && (
-                      <a
-                        href={`https://www.${d.domain}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-green-400 hover:text-green-300 font-mono transition-colors"
-                      >
-                        www.{d.domain} ↗
-                      </a>
-                    )}
-                  </div>
-
-                  {/* Delete */}
-                  <div className="flex-shrink-0">
-                    {cdDeleteConfirm === d.id ? (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-red-400">Remove?</span>
-                        <button onClick={() => handleDeleteDomain(d.id)} className="text-xs px-2 py-1 rounded bg-red-500/20 text-red-400 border border-red-500/30">Yes</button>
-                        <button onClick={() => setCdDeleteConfirm(null)} className="text-xs px-2 py-1 rounded bg-white/5 text-gray-400 border border-white/10">No</button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setCdDeleteConfirm(d.id)}
-                        className="text-xs px-2.5 py-1 rounded-lg bg-white/5 text-gray-400 border border-white/10 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 transition-all"
-                      >Remove</button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+    return NextResponse.json({ website: updated }, { status: 201 })
+  } catch (error) {
+    console.error('[POST /api/websites]', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }

@@ -1,901 +1,468 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
 
-// ─── Utility ─────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-function cn(...classes: Array<string | false | null | undefined>): string {
-  return classes.filter(Boolean).join(' ');
-}
+type IconProps = { className?: string };
 
-// ─── Nav ─────────────────────────────────────────────────────────────────────
-
-function Nav() {
-  const [scrolled, setScrolled] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  const links = ['Features', 'Pricing', 'Docs'];
-
-  return (
-    <nav
-      className={cn(
-        'fixed top-0 left-0 right-0 z-50 transition-all duration-300',
-        scrolled
-          ? 'bg-[#0a0a0a]/90 backdrop-blur-lg border-b border-white/5 shadow-xl'
-          : 'bg-transparent'
-      )}
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <a href="#" className="flex items-center gap-2 group">
-            <span className="text-2xl leading-none">⬡</span>
-            <span className="font-bold text-xl tracking-tight text-white group-hover:text-sky-400 transition-colors">
-              TokenFlow
-            </span>
-          </a>
-
-          {/* Desktop links */}
-          <div className="hidden md:flex items-center gap-8">
-            {links.map((l) => (
-              <a
-                key={l}
-                href={`#${l.toLowerCase()}`}
-                className="text-sm text-slate-400 hover:text-white transition-colors"
-              >
-                {l}
-              </a>
-            ))}
-          </div>
-
-          {/* CTA group */}
-          <div className="hidden md:flex items-center gap-3">
-            <a
-              href="/sign-in"
-              className="text-sm text-slate-400 hover:text-white transition-colors px-3 py-1.5"
-            >
-              Sign in
-            </a>
-            <a
-              href="/sign-up"
-              className="text-sm font-semibold bg-sky-500 hover:bg-sky-400 text-white px-4 py-2 rounded-lg transition-colors shadow-lg shadow-sky-500/20"
-            >
-              Get started free →
-            </a>
-          </div>
-
-          {/* Mobile burger */}
-          <button
-            onClick={() => setMenuOpen(!menuOpen)}
-            className="md:hidden p-2 text-slate-400 hover:text-white"
-            aria-label="Toggle menu"
-          >
-            <span className="block w-5 h-0.5 bg-current mb-1" />
-            <span className="block w-5 h-0.5 bg-current mb-1" />
-            <span className="block w-5 h-0.5 bg-current" />
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile menu */}
-      {menuOpen && (
-        <div className="md:hidden bg-[#111111] border-t border-white/5 px-4 py-4 space-y-3">
-          {links.map((l) => (
-            <a
-              key={l}
-              href={`#${l.toLowerCase()}`}
-              onClick={() => setMenuOpen(false)}
-              className="block text-sm text-slate-300 hover:text-white py-1"
-            >
-              {l}
-            </a>
-          ))}
-          <div className="pt-2 border-t border-white/5 flex flex-col gap-2">
-            <a href="/sign-in" className="text-sm text-slate-400 hover:text-white py-1">
-              Sign in
-            </a>
-            <a
-              href="/sign-up"
-              className="text-sm font-semibold bg-sky-500 text-white px-4 py-2 rounded-lg text-center"
-            >
-              Get started free →
-            </a>
-          </div>
-        </div>
-      )}
-    </nav>
-  );
-}
-
-// ─── Animated Token Counter ───────────────────────────────────────────────────
-
-function AnimatedCounter({ target, duration = 2000 }: { target: number; duration?: number }) {
-  const [value, setValue] = useState(0);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          const start = Date.now();
-          const tick = () => {
-            const elapsed = Date.now() - start;
-            const progress = Math.min(elapsed / duration, 1);
-            const eased = 1 - Math.pow(1 - progress, 3);
-            setValue(Math.floor(eased * target));
-            if (progress < 1) requestAnimationFrame(tick);
-          };
-          requestAnimationFrame(tick);
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.5 }
-    );
-    if (ref.current) observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, [target, duration]);
-
-  return (
-    <span ref={ref}>{value.toLocaleString()}</span>
-  );
-}
-
-// Live rolling token counter for social proof
-function LiveTokenCounter() {
-  const [count, setCount] = useState(2847);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCount((c) => c + Math.floor(Math.random() * 12 + 3));
-    }, 1400);
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-full px-4 py-2 text-sm text-amber-300">
-      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse-token" />
-      <span className="font-mono font-semibold">{count.toLocaleString()}</span>
-      <span className="text-amber-400/70">tokens spent in the last minute</span>
-    </div>
-  );
-}
-
-// ─── Hero ─────────────────────────────────────────────────────────────────────
-
-function Hero() {
-  return (
-    <section className="relative min-h-screen flex flex-col justify-center items-center px-4 pt-24 pb-16 overflow-hidden">
-      {/* Background glow blobs */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[700px] h-[400px] bg-sky-600/10 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-1/3 right-1/4 w-[400px] h-[300px] bg-amber-500/8 rounded-full blur-[100px] pointer-events-none" />
-
-      <div className="relative z-10 max-w-4xl mx-auto text-center space-y-8">
-        {/* Badge */}
-        <div className="inline-flex items-center gap-2 bg-sky-500/10 border border-sky-500/30 rounded-full px-4 py-1.5 text-sky-300 text-sm font-medium">
-          <span>🚀</span>
-          <span>No credit card needed — start with 100 free tokens</span>
-        </div>
-
-        {/* Headline */}
-        <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold leading-[1.05] tracking-tight">
-          Build anything
-          <br />
-          <span className="text-gradient-blue">pay only for</span>
-          <br />
-          what you use
-        </h1>
-
-        {/* Sub-headline */}
-        <p className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed">
-          TokenFlow is the only platform where you control your costs completely.
-          Spend tokens on{' '}
-          <span className="text-sky-400">AI websites</span>,{' '}
-          <span className="text-sky-400">domains</span>,{' '}
-          <span className="text-sky-400">email accounts</span>, and{' '}
-          <span className="text-sky-400">content rewrites</span> — tokens never expire.
-        </p>
-
-        {/* CTAs */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <a
-            href="/sign-up"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-sky-500 hover:bg-sky-400 text-white font-bold text-base px-8 py-4 rounded-xl shadow-2xl shadow-sky-500/30 transition-all hover:scale-105 hover:shadow-sky-400/40"
-          >
-            🎁 Start free — 100 tokens
-          </a>
-          <a
-            href="#pricing"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white font-semibold text-base px-8 py-4 rounded-xl transition-all"
-          >
-            See pricing →
-          </a>
-        </div>
-
-        {/* Social proof live counter */}
-        <div className="flex justify-center pt-2">
-          <LiveTokenCounter />
-        </div>
-
-        {/* Stats row */}
-        <div className="grid grid-cols-3 gap-6 pt-8 border-t border-white/5 max-w-lg mx-auto">
-          {[
-            { value: 12400, label: 'Active builders', suffix: '+' },
-            { value: 3200000, label: 'Tokens spent', suffix: '+' },
-            { value: 99, label: 'Uptime SLA', suffix: '%' },
-          ].map(({ value, label, suffix }) => (
-            <div key={label} className="text-center">
-              <div className="text-2xl font-extrabold text-white">
-                <AnimatedCounter target={value} />
-                {suffix}
-              </div>
-              <div className="text-xs text-slate-500 mt-0.5">{label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── How It Works ─────────────────────────────────────────────────────────────
-
-function HowItWorks() {
-  const steps = [
-    {
-      icon: '📱',
-      step: '01',
-      title: 'Sign up free',
-      desc: 'Create your account with phone verification — no credit card, no commitment. You instantly receive 100 free tokens to explore the platform.',
-    },
-    {
-      icon: '🪙',
-      step: '02',
-      title: 'Buy tokens',
-      desc: 'Top up your wallet with token packs starting at $10, or subscribe for a monthly allowance. Tokens never expire and roll over on monthly plans.',
-    },
-    {
-      icon: '⚡',
-      step: '03',
-      title: 'Build anything',
-      desc: "Spend tokens on AI websites, domains, email accounts, or content rewrites. You'll always see the cost before you confirm — no surprises.",
-    },
-  ];
-
-  return (
-    <section id="features" className="py-24 px-4">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-16 space-y-3">
-          <p className="text-sky-400 text-sm font-semibold uppercase tracking-widest">How it works</p>
-          <h2 className="text-4xl sm:text-5xl font-extrabold">
-            Three steps to launch
-          </h2>
-          <p className="text-slate-400 text-lg max-w-xl mx-auto">
-            Simple by design. Powerful by default.
-          </p>
-        </div>
-
-        <div className="relative grid md:grid-cols-3 gap-8">
-          {/* connector line */}
-          <div className="hidden md:block absolute top-12 left-1/6 right-1/6 h-px bg-gradient-to-r from-transparent via-sky-500/40 to-transparent" />
-
-          {steps.map(({ icon, step, title, desc }) => (
-            <div
-              key={step}
-              className="relative bg-[#111111] border border-white/5 rounded-2xl p-8 card-surface-hover group"
-            >
-              <div className="absolute -top-3 left-8 bg-sky-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                Step {step}
-              </div>
-              <div className="text-4xl mb-4 animate-float" style={{ animationDelay: `${parseInt(step) * 0.4}s` }}>
-                {icon}
-              </div>
-              <h3 className="text-xl font-bold mb-2 group-hover:text-sky-400 transition-colors">{title}</h3>
-              <p className="text-slate-400 text-sm leading-relaxed">{desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Features Grid ────────────────────────────────────────────────────────────
-
-function FeaturesGrid() {
-  const features = [
-    {
-      icon: '🤖',
-      title: 'AI Website Builder',
-      desc: 'Describe your site in plain English. Our AI generates a full, responsive website in seconds. Preview before spending a single token.',
-      badge: '50 tokens',
-      badgeColor: 'amber',
-    },
-    {
-      icon: '🌐',
-      title: 'Custom Domains',
-      desc: 'Register a new domain or connect one you already own. Instant DNS setup, SSL included, zero configuration headaches.',
-      badge: '20 tokens',
-      badgeColor: 'amber',
-    },
-    {
-      icon: '📧',
-      title: 'Email Accounts',
-      desc: 'Spin up professional email addresses on your domain. Forwarders, catch-alls, and custom routing all available out of the box.',
-      badge: '10 tokens',
-      badgeColor: 'amber',
-    },
-    {
-      icon: '🔌',
-      title: 'API Access',
-      desc: 'Automate everything with our REST API. Trigger website builds, top up balances, and manage domains programmatically. Growth plan and above.',
-      badge: 'Growth+',
-      badgeColor: 'sky',
-    },
-    {
-      icon: '👛',
-      title: 'Token Wallet',
-      desc: 'Full visibility of every token spent. Smart alerts when your balance dips low. Every action shows its cost before you confirm.',
-      badge: 'All plans',
-      badgeColor: 'green',
-    },
-    {
-      icon: '🏷️',
-      title: 'White Label',
-      desc: 'Remove all TokenFlow branding and sell under your own name. Perfect for agencies managing multiple client accounts at scale.',
-      badge: 'Growth+',
-      badgeColor: 'sky',
-    },
-  ];
-
-  const badgeStyles: Record<string, string> = {
-    amber: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-    sky: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
-    green: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
-  };
-
-  return (
-    <section className="py-24 px-4 bg-[#0d0d0d]">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-16 space-y-3">
-          <p className="text-sky-400 text-sm font-semibold uppercase tracking-widest">Features</p>
-          <h2 className="text-4xl sm:text-5xl font-extrabold">
-            Everything you need to{' '}
-            <span className="text-gradient-blue">ship faster</span>
-          </h2>
-        </div>
-
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {features.map(({ icon, title, desc, badge, badgeColor }) => (
-            <div
-              key={title}
-              className="bg-[#111111] border border-white/5 rounded-2xl p-7 card-surface-hover group flex flex-col gap-4"
-            >
-              <div className="flex items-start justify-between">
-                <span className="text-3xl">{icon}</span>
-                <span className={cn('text-xs font-semibold border rounded-full px-2.5 py-1', badgeStyles[badgeColor])}>
-                  {badge}
-                </span>
-              </div>
-              <div>
-                <h3 className="text-lg font-bold mb-1 group-hover:text-sky-400 transition-colors">{title}</h3>
-                <p className="text-slate-400 text-sm leading-relaxed">{desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Pricing ──────────────────────────────────────────────────────────────────
-
-type PricingCardProps = {
-  plan: string;
-  price: string;
-  period?: string;
-  tokens: string;
-  features: string[];
-  cta: React.ReactNode;
-  highlight?: boolean;
-  badge?: string;
+type Transaction = {
+  id: string;
+  description: string;
+  amount: number;
+  balanceAfter: number;
+  createdAt: string;
 };
 
-function PricingCard({ plan, price, period, tokens, features, cta, highlight, badge }: PricingCardProps) {
+type DashboardData = {
+  tokens?: {
+    wallet?: { balance?: number; lifetimeSpent?: number };
+    daysRemaining?: number;
+    transactions?: Transaction[];
+  };
+  websites?: { websites?: unknown[] };
+  domains?: { domains?: Array<{ verified?: boolean }> };
+  emails?: { emails?: unknown[] };
+};
+
+type ActionCost = { label: string; cost: number; icon: React.ReactNode };
+
+// ─── SVG Icons ────────────────────────────────────────────────────────────────
+
+function IconCoin({ className = 'w-5 h-5' }: IconProps) {
   return (
-    <div
-      className={cn(
-        'relative flex flex-col rounded-2xl p-8 border transition-all duration-200',
-        highlight
-          ? 'bg-sky-950/40 border-sky-500/60 shadow-2xl shadow-sky-500/20 scale-[1.03]'
-          : 'bg-[#111111] border-white/5 hover:border-sky-500/30'
-      )}
-    >
-      {badge && (
-        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-sky-500 text-white text-xs font-bold px-4 py-1 rounded-full whitespace-nowrap shadow-lg shadow-sky-500/40">
-          {badge}
-        </div>
-      )}
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
 
-      <div className="mb-6">
-        <h3 className="text-lg font-bold text-white mb-1">{plan}</h3>
-        <div className="flex items-end gap-1">
-          <span className="text-4xl font-extrabold text-white">{price}</span>
-          {period && <span className="text-slate-400 text-sm mb-1.5">{period}</span>}
-        </div>
-        <div className="mt-2 inline-flex items-center gap-1.5 bg-amber-500/15 border border-amber-500/30 text-amber-300 text-sm rounded-full px-3 py-1">
-          🪙 {tokens}
-        </div>
-      </div>
+function IconGlobe({ className = 'w-5 h-5' }: IconProps) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+    </svg>
+  );
+}
 
-      <ul className="space-y-3 flex-1 mb-8">
-        {features.map((f) => (
-          <li key={f} className="flex items-start gap-2.5 text-sm text-slate-300">
-            <span className="text-emerald-400 mt-0.5 shrink-0">✓</span>
-            {f}
-          </li>
-        ))}
-      </ul>
+function IconLink({ className = 'w-5 h-5' }: IconProps) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+    </svg>
+  );
+}
 
-      <a
-        href="/sign-up"
-        className={cn(
-          'block text-center font-semibold text-sm py-3 rounded-xl transition-all',
-          highlight
-            ? 'bg-sky-500 hover:bg-sky-400 text-white shadow-lg shadow-sky-500/30 hover:shadow-sky-400/40 hover:scale-105'
-            : 'bg-white/5 hover:bg-white/10 border border-white/10 text-white'
+function IconMail({ className = 'w-5 h-5' }: IconProps) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+    </svg>
+  );
+}
+
+function IconSparkle({ className = 'w-5 h-5' }: IconProps) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5 3l1.5 3.5L10 8l-3.5 1.5L5 13l-1.5-3.5L0 8l3.5-1.5L5 3zm14 11l1 2.5L22.5 17l-2.5 1L19 20.5l-1-2.5L15.5 17l2.5-1L19 14zm-7-9l.75 1.75L14.5 7.5l-1.75.75L12 10l-.75-1.75L9.5 7.5l1.75-.75L12 5z" />
+    </svg>
+  );
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins  = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days  = Math.floor(diff / 86400000);
+  if (mins < 60)  return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
+
+function txIcon(tx: Transaction): { icon: React.ReactNode; color: string } {
+  const d = (tx.description ?? '').toLowerCase();
+  if (d.includes('website'))          return { icon: <IconGlobe />,   color: 'text-blue-400' };
+  if (d.includes('domain'))           return { icon: <IconLink />,    color: 'text-purple-400' };
+  if (d.includes('email'))            return { icon: <IconMail />,    color: 'text-green-400' };
+  if (d.includes('ai') || d.includes('rewrite')) return { icon: <IconSparkle />, color: 'text-pink-400' };
+  return { icon: <IconCoin />, color: 'text-amber-400' };
+}
+
+const ACTION_COSTS: ActionCost[] = [
+  { label: 'Create a Website', cost: 50, icon: <IconGlobe /> },
+  { label: 'Connect a Domain', cost: 20, icon: <IconLink /> },
+  { label: 'Set Up an Email',  cost: 10, icon: <IconMail /> },
+  { label: 'AI Content Rewrite', cost: 3, icon: <IconSparkle /> },
+];
+
+// ─── Components ───────────────────────────────────────────────────────────────
+
+type StatCardProps = {
+  title: string;
+  value: string | number;
+  subtitle?: string;
+  icon: React.ReactNode;
+  accent: string;
+  href?: string;
+  loading?: boolean;
+};
+
+function StatCard({ title, value, subtitle, icon, accent, href, loading }: StatCardProps) {
+  const content = (
+    <div className={`p-5 rounded-xl bg-[#111] border border-white/10 hover:border-white/20 transition-all duration-200 group ${href ? 'cursor-pointer' : ''}`}>
+      <div className="flex items-start justify-between mb-4">
+        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${accent}`}>
+          {icon}
+        </div>
+        {href && (
+          <svg className="w-4 h-4 text-gray-600 group-hover:text-gray-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
         )}
-      >
-        {cta}
-      </a>
+      </div>
+      {loading ? (
+        <div className="h-8 w-16 bg-white/10 rounded animate-pulse mb-1" />
+      ) : (
+        <p className="text-3xl font-black text-white tabular-nums mb-1">{value}</p>
+      )}
+      <p className="text-sm font-medium text-gray-300">{title}</p>
+      {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
     </div>
   );
-}
 
-function Pricing() {
-  const plans = [
-    {
-      plan: 'Free',
-      price: '$0',
-      period: '',
-      tokens: '100 tokens on signup',
-      features: [
-        'Phone verification only',
-        'No credit card needed',
-        'All core features unlocked',
-        'Token wallet with spend history',
-        'Email support',
-      ],
-      cta: 'Start free →',
-      highlight: false,
-    },
-    {
-      plan: 'Starter',
-      price: '$29',
-      period: '/month',
-      tokens: '2,000 tokens/month',
-      badge: '🔥 Most popular',
-      features: [
-        '2,000 tokens every month',
-        '20% rollover on unused tokens',
-        'Low-balance email alerts',
-        'Priority support',
-        'Usage analytics dashboard',
-      ],
-      cta: 'Start Starter →',
-      highlight: true,
-    },
-    {
-      plan: 'Growth',
-      price: '$79',
-      period: '/month',
-      tokens: '8,000 tokens/month',
-      features: [
-        '8,000 tokens every month',
-        '20% rollover on unused tokens',
-        'Full REST API access',
-        'White-label mode for agencies',
-        'Dedicated account manager',
-        'SLA guarantee',
-      ],
-      cta: 'Start Growth →',
-      highlight: false,
-    },
-  ];
-
-  const packs = [
-    { label: '500 tokens', price: '$10', per: '2¢/token' },
-    { label: '1,500 tokens', price: '$25', per: '1.7¢/token' },
-    { label: '3,500 tokens', price: '$50', per: '1.4¢/token', popular: true },
-    { label: '8,000 tokens', price: '$100', per: '1.25¢/token' },
-  ];
-
-  return (
-    <section id="pricing" className="py-24 px-4">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-16 space-y-3">
-          <p className="text-sky-400 text-sm font-semibold uppercase tracking-widest">Pricing</p>
-          <h2 className="text-4xl sm:text-5xl font-extrabold">
-            Transparent, flexible pricing
-          </h2>
-          <p className="text-slate-400 text-lg max-w-xl mx-auto">
-            Subscribe for volume discounts, or buy token packs that never expire.
-          </p>
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-6 items-center mb-16">
-          {plans.map((p) => (
-            <PricingCard key={p.plan} {...p} />
-          ))}
-        </div>
-
-        {/* PAYG packs */}
-        <div className="bg-[#111111] border border-white/5 rounded-2xl p-8">
-          <div className="text-center mb-8">
-            <h3 className="text-2xl font-bold">💳 Pay-as-you-go token packs</h3>
-            <p className="text-slate-400 text-sm mt-1">One-time purchase. Tokens never expire. Stack them up.</p>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {packs.map(({ label, price, per, popular }) => (
-              <div
-                key={label}
-                className={cn(
-                  'relative flex flex-col items-center gap-3 border rounded-xl p-5 text-center transition-all hover:border-sky-500/50',
-                  popular
-                    ? 'border-amber-500/50 bg-amber-500/5'
-                    : 'border-white/5 bg-white/2'
-                )}
-              >
-                {popular && (
-                  <span className="absolute -top-3 bg-amber-500 text-black text-xs font-bold px-3 py-0.5 rounded-full">
-                    Best value
-                  </span>
-                )}
-                <div className="text-3xl font-extrabold text-white">{price}</div>
-                <div className="text-amber-300 font-semibold text-sm">🪙 {label}</div>
-                <div className="text-slate-500 text-xs">{per}</div>
-                <a
-                  href="/sign-up"
-                  className="w-full mt-1 bg-white/5 hover:bg-sky-500 hover:text-white border border-white/10 hover:border-sky-500 text-slate-300 text-sm font-semibold py-2 rounded-lg transition-all"
-                >
-                  Buy now →
-                </a>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Token Cost Table ─────────────────────────────────────────────────────────
-
-function TokenCostTable() {
-  const rows = [
-    { action: '🤖 AI-powered website', tokens: 50, note: 'Full site generated, preview before spending' },
-    { action: '🌐 Domain registration / connect', tokens: 20, note: 'SSL + DNS setup included' },
-    { action: '📧 Email account setup', tokens: 10, note: 'Per mailbox on your domain' },
-    { action: '✍️ AI content rewrite', tokens: 3, note: 'Per page or section' },
-  ];
-
-  return (
-    <section className="py-24 px-4 bg-[#0d0d0d]">
-      <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-12 space-y-3">
-          <p className="text-amber-400 text-sm font-semibold uppercase tracking-widest">Token costs</p>
-          <h2 className="text-4xl sm:text-5xl font-extrabold">
-            Always know what{' '}
-            <span className="text-gradient-amber">you'll spend</span>
-          </h2>
-          <p className="text-slate-400 text-lg max-w-xl mx-auto">
-            Every action shows its token cost before you confirm. No hidden fees. Ever.
-          </p>
-        </div>
-
-        <div className="bg-[#111111] border border-white/5 rounded-2xl overflow-hidden">
-          <div className="grid grid-cols-3 text-xs font-semibold uppercase tracking-widest text-slate-500 px-6 py-3 border-b border-white/5">
-            <span>Action</span>
-            <span className="text-center">Token cost</span>
-            <span className="text-right">Notes</span>
-          </div>
-          {rows.map(({ action, tokens, note }, i) => (
-            <div
-              key={action}
-              className={cn(
-                'grid grid-cols-3 items-center px-6 py-5 gap-4',
-                i < rows.length - 1 && 'border-b border-white/5'
-              )}
-            >
-              <span className="font-semibold text-white text-sm">{action}</span>
-              <div className="flex justify-center">
-                <span className="inline-flex items-center gap-1.5 bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold text-sm px-3 py-1 rounded-full">
-                  🪙 {tokens} tokens
-                </span>
-              </div>
-              <span className="text-slate-400 text-xs text-right">{note}</span>
-            </div>
-          ))}
-
-          {/* Confirmation preview mock */}
-          <div className="bg-sky-950/30 border-t border-sky-500/20 px-6 py-4 flex items-center gap-3">
-            <span className="text-2xl">👁️</span>
-            <div>
-              <p className="text-sky-300 text-sm font-semibold">Preview before you spend</p>
-              <p className="text-slate-400 text-xs">
-                Every AI website build includes a live preview. Only confirms token spend once you approve.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Referral Banner ──────────────────────────────────────────────────────────
-
-function ReferralBanner() {
-  return (
-    <section className="py-20 px-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="relative overflow-hidden bg-gradient-to-br from-sky-950/60 via-[#111111] to-amber-950/30 border border-sky-500/20 rounded-3xl p-12 text-center">
-          {/* Background decoration */}
-          <div className="absolute top-0 right-0 w-72 h-72 bg-sky-500/5 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-72 h-72 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
-
-          <div className="relative z-10 space-y-6">
-            <div className="text-5xl">🤝</div>
-            <div>
-              <h2 className="text-3xl sm:text-4xl font-extrabold mb-2">
-                Give <span className="text-gradient-amber">50 tokens</span>, get{' '}
-                <span className="text-gradient-amber">50 tokens</span>
-              </h2>
-              <p className="text-slate-400 text-lg max-w-lg mx-auto">
-                Share your referral link. When a friend signs up and verifies their phone, you both get 50 free tokens
-                — instantly added to your wallets.
-              </p>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
-              <div className="bg-white/5 border border-white/10 rounded-xl px-5 py-3 font-mono text-sm text-slate-300 select-all">
-                tokenflow.io/r/your-code
-              </div>
-              <a
-                href="/sign-up"
-                className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-6 py-3 rounded-xl transition-all hover:scale-105 shadow-lg shadow-amber-500/30 text-sm"
-              >
-                Get my referral link →
-              </a>
-            </div>
-
-            <div className="grid sm:grid-cols-3 gap-6 pt-4 border-t border-white/5">
-              {[
-                { icon: '🔗', label: 'Share your link' },
-                { icon: '✅', label: 'Friend signs up + verifies' },
-                { icon: '🪙', label: 'Both get 50 tokens' },
-              ].map(({ icon, label }) => (
-                <div key={label} className="text-sm text-slate-400 flex flex-col items-center gap-2">
-                  <span className="text-2xl">{icon}</span>
-                  {label}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── FAQ ──────────────────────────────────────────────────────────────────────
-
-function FAQ() {
-  const [open, setOpen] = useState<number | null>(null);
-
-  const faqs = [
-    {
-      q: 'Do tokens expire?',
-      a: "No. Pay-as-you-go token packs never expire — ever. On monthly plans, unused tokens roll over up to 20% of your plan's monthly allowance. So if you're on Starter ($29, 2,000 tokens), up to 400 unused tokens carry into the next month.",
-    },
-    {
-      q: 'What happens if I run out of tokens mid-action?',
-      a: "You won't be charged a partial token cost. If your balance is too low to complete an action, you'll see a top-up prompt before anything is debited. We never leave you halfway through a build.",
-    },
-    {
-      q: 'Can I cancel my monthly plan at any time?',
-      a: "Yes, with zero friction. Cancel any time from your dashboard. You keep all remaining tokens in your wallet — they convert to permanent pay-as-you-go tokens that never expire.",
-    },
-    {
-      q: 'What is white-label mode?',
-      a: "White-label mode removes all TokenFlow branding from client-facing interfaces, custom dashboards, and email notifications. Your clients see your brand, not ours. Available on the Growth plan ($79/month) and above.",
-    },
-    {
-      q: 'How does the free tier work?',
-      a: "Sign up with just a phone number — no credit card needed. You get 100 tokens instantly credited to your wallet. That's enough to build 2 AI websites, set up 1 domain, 1 email account, and still have tokens left over for content rewrites.",
-    },
-  ];
-
-  return (
-    <section className="py-24 px-4 bg-[#0d0d0d]">
-      <div className="max-w-3xl mx-auto">
-        <div className="text-center mb-12 space-y-3">
-          <p className="text-sky-400 text-sm font-semibold uppercase tracking-widest">FAQ</p>
-          <h2 className="text-4xl sm:text-5xl font-extrabold">Common questions</h2>
-        </div>
-
-        <div className="space-y-3">
-          {faqs.map(({ q, a }, i) => (
-            <div
-              key={i}
-              className="bg-[#111111] border border-white/5 rounded-xl overflow-hidden"
-            >
-              <button
-                onClick={() => setOpen(open === i ? null : i)}
-                className="w-full flex items-center justify-between px-6 py-5 text-left hover:bg-white/2 transition-colors"
-              >
-                <span className="font-semibold text-white text-sm sm:text-base">{q}</span>
-                <span
-                  className={cn(
-                    'text-sky-400 text-xl shrink-0 ml-4 transition-transform duration-200',
-                    open === i && 'rotate-45'
-                  )}
-                >
-                  +
-                </span>
-              </button>
-              {open === i && (
-                <div className="px-6 pb-5 text-slate-400 text-sm leading-relaxed border-t border-white/5 pt-4">
-                  {a}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Final CTA Banner ─────────────────────────────────────────────────────────
-
-function FinalCTA() {
-  return (
-    <section className="py-24 px-4">
-      <div className="max-w-3xl mx-auto text-center space-y-8">
-        <div className="text-6xl">⬡</div>
-        <h2 className="text-4xl sm:text-5xl font-extrabold">
-          Ready to build?
-        </h2>
-        <p className="text-slate-400 text-lg max-w-xl mx-auto">
-          Start with 100 free tokens — no credit card, no commitment. Your first AI website could be live in minutes.
-        </p>
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <a
-            href="/sign-up"
-            className="inline-flex items-center gap-2 bg-sky-500 hover:bg-sky-400 text-white font-bold text-base px-10 py-4 rounded-xl shadow-2xl shadow-sky-500/30 transition-all hover:scale-105"
-          >
-            🎁 Get 100 free tokens
-          </a>
-          <a
-            href="#pricing"
-            className="inline-flex items-center gap-2 text-slate-400 hover:text-white text-sm transition-colors"
-          >
-            View all pricing →
-          </a>
-        </div>
-        <p className="text-slate-600 text-xs">
-          Phone verification only · Tokens never expire · Cancel anytime
-        </p>
-      </div>
-    </section>
-  );
-}
-
-// ─── Footer ───────────────────────────────────────────────────────────────────
-
-function Footer() {
-  const cols = [
-    {
-      heading: 'Product',
-      links: ['Features', 'Pricing', 'Changelog', 'Roadmap', 'Status'],
-    },
-    {
-      heading: 'Developers',
-      links: ['Documentation', 'API Reference', 'SDKs', 'Webhooks', 'Open source'],
-    },
-    {
-      heading: 'Company',
-      links: ['About', 'Blog', 'Careers', 'Press', 'Contact'],
-    },
-    {
-      heading: 'Legal',
-      links: ['Privacy policy', 'Terms of service', 'Cookie policy', 'GDPR'],
-    },
-  ];
-
-  return (
-    <footer className="border-t border-white/5 bg-[#0a0a0a] py-16 px-4">
-      <div className="max-w-6xl mx-auto">
-        <div className="grid md:grid-cols-5 gap-10 mb-12">
-          {/* Brand */}
-          <div className="md:col-span-1 space-y-4">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">⬡</span>
-              <span className="font-bold text-lg text-white">TokenFlow</span>
-            </div>
-            <p className="text-slate-500 text-sm leading-relaxed">
-              Build websites, domains, and email — powered by AI tokens. Pay only for what you use.
-            </p>
-            <div className="flex gap-3 pt-1">
-              {['𝕏', '📘', '💼', '⌨️'].map((icon, i) => (
-                <a
-                  key={i}
-                  href="#"
-                  className="w-8 h-8 rounded-lg bg-white/5 hover:bg-sky-500/20 flex items-center justify-center text-slate-400 hover:text-sky-400 transition-all text-sm"
-                >
-                  {icon}
-                </a>
-              ))}
-            </div>
-          </div>
-
-          {/* Link columns */}
-          {cols.map(({ heading, links }) => (
-            <div key={heading}>
-              <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">
-                {heading}
-              </h4>
-              <ul className="space-y-2.5">
-                {links.map((l) => (
-                  <li key={l}>
-                    <a href="#" className="text-sm text-slate-400 hover:text-white transition-colors">
-                      {l}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-8 border-t border-white/5">
-          <p className="text-slate-600 text-xs">
-            © {new Date().getFullYear()} TokenFlow, Inc. All rights reserved.
-          </p>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-slate-500 text-xs">All systems operational</span>
-          </div>
-        </div>
-      </div>
-    </footer>
-  );
+  if (href) return <Link href={href}>{content}</Link>;
+  return content;
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function HomePage() {
+export default function DashboardPage() {
+  const [selectedAction, setSelectedAction] = useState<ActionCost>(ACTION_COSTS[0]);
+  const [loading, setLoading]               = useState<boolean>(true);
+  const [data, setData]                     = useState<DashboardData | null>(null);
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/tokens').then((r) => r.json()),
+      fetch('/api/websites').then((r) => r.json()),
+      fetch('/api/domains').then((r) => r.json()),
+      fetch('/api/emails').then((r) => r.json()),
+    ]).then(([tokens, websites, domains, emails]) => {
+      setData({ tokens, websites, domains, emails });
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  const tokenBalance    = data?.tokens?.wallet?.balance ?? 0;
+  const lifetimeSpent   = data?.tokens?.wallet?.lifetimeSpent ?? 0;
+  const daysRemaining   = data?.tokens?.daysRemaining ?? 0;
+  const transactions    = data?.tokens?.transactions ?? [];
+  const websiteCount    = data?.websites?.websites?.length ?? 0;
+  const domainCount     = data?.domains?.domains?.filter((d) => d.verified)?.length ?? 0;
+  const emailCount      = data?.emails?.emails?.length ?? 0;
+  const canAfford       = tokenBalance >= selectedAction.cost;
+
+  // Compute this-month spend breakdown from transactions
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthTx = transactions.filter(
+    (t) => t.amount < 0 && new Date(t.createdAt) >= monthStart
+  );
+  const monthSpent = monthTx.reduce((s, t) => s + Math.abs(t.amount), 0);
+
+  const breakdown = { websites: 0, domains: 0, emails: 0, ai: 0, other: 0 };
+  for (const t of monthTx) {
+    const d = (t.description ?? '').toLowerCase();
+    if (d.includes('website'))                   breakdown.websites += Math.abs(t.amount);
+    else if (d.includes('domain'))               breakdown.domains  += Math.abs(t.amount);
+    else if (d.includes('email'))                breakdown.emails   += Math.abs(t.amount);
+    else if (d.includes('ai') || d.includes('rewrite')) breakdown.ai += Math.abs(t.amount);
+    else                                         breakdown.other    += Math.abs(t.amount);
+  }
+
+  const recentActivity = transactions.slice(0, 6);
+
+  const hour     = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
   return (
-    <>
-      <Nav />
-      <main>
-        <Hero />
-        <HowItWorks />
-        <FeaturesGrid />
-        <Pricing />
-        <TokenCostTable />
-        <ReferralBanner />
-        <FAQ />
-        <FinalCTA />
-      </main>
-      <Footer />
-    </>
+    <div className="space-y-6 max-w-6xl">
+      {/* Welcome header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-white">{greeting}</h2>
+          <p className="text-gray-400 mt-1 text-sm">
+            Here&apos;s what&apos;s happening with your account today.
+          </p>
+        </div>
+        {!loading && daysRemaining > 0 && (
+          <div className="text-right">
+            <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Projected empty</p>
+            <p className="text-2xl font-black text-amber-400 tabular-nums">{daysRemaining}d</p>
+            <p className="text-xs text-gray-500">at current usage rate</p>
+          </div>
+        )}
+      </div>
+
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard
+          title="Token Balance"
+          value={tokenBalance.toLocaleString()}
+          subtitle="tokens remaining"
+          icon={<IconCoin className="w-5 h-5 text-amber-400" />}
+          accent="bg-amber-400/10"
+          href="/dashboard/tokens"
+          loading={loading}
+        />
+        <StatCard
+          title="Websites Created"
+          value={websiteCount}
+          subtitle="active sites"
+          icon={<IconGlobe className="w-5 h-5 text-blue-400" />}
+          accent="bg-blue-500/10"
+          href="/dashboard/websites"
+          loading={loading}
+        />
+        <StatCard
+          title="Domains Connected"
+          value={domainCount}
+          subtitle="verified domains"
+          icon={<IconLink className="w-5 h-5 text-purple-400" />}
+          accent="bg-purple-500/10"
+          href="/dashboard/domains"
+          loading={loading}
+        />
+        <StatCard
+          title="Emails Active"
+          value={emailCount}
+          subtitle="mailboxes"
+          icon={<IconMail className="w-5 h-5 text-green-400" />}
+          accent="bg-green-500/10"
+          href="/dashboard/emails"
+          loading={loading}
+        />
+      </div>
+
+      {/* Middle row */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {/* Token usage this month */}
+        <div className="lg:col-span-2 p-5 rounded-xl bg-[#111] border border-white/10">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-white">This Month&apos;s Usage</h3>
+            <Link href="/dashboard/usage" className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+              View details →
+            </Link>
+          </div>
+
+          {loading ? (
+            <div className="space-y-3">
+              <div className="h-8 w-32 bg-white/10 rounded animate-pulse" />
+              <div className="h-3 w-full bg-white/10 rounded-full animate-pulse" />
+            </div>
+          ) : monthSpent === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500 text-sm">No tokens spent this month yet.</p>
+              <p className="text-gray-600 text-xs mt-1">Create a site or add a domain to get started.</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-end gap-2 mb-3">
+                <span className="text-3xl font-black text-white tabular-nums">{monthSpent.toLocaleString()}</span>
+                <span className="text-gray-500 mb-1">tokens spent this month</span>
+              </div>
+
+              <div className="w-full h-3 bg-white/5 rounded-full overflow-hidden mb-3 flex">
+                {breakdown.websites > 0 && <div className="h-full bg-blue-500"   style={{ width: `${(breakdown.websites / monthSpent) * 100}%` }} />}
+                {breakdown.domains  > 0 && <div className="h-full bg-purple-500 ml-0.5" style={{ width: `${(breakdown.domains  / monthSpent) * 100}%` }} />}
+                {breakdown.emails   > 0 && <div className="h-full bg-green-500  ml-0.5" style={{ width: `${(breakdown.emails   / monthSpent) * 100}%` }} />}
+                {breakdown.ai       > 0 && <div className="h-full bg-pink-500   ml-0.5" style={{ width: `${(breakdown.ai       / monthSpent) * 100}%` }} />}
+                {breakdown.other    > 0 && <div className="h-full bg-gray-500   ml-0.5" style={{ width: `${(breakdown.other    / monthSpent) * 100}%` }} />}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400">
+                {breakdown.websites > 0 && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Websites ({breakdown.websites})</span>}
+                {breakdown.domains  > 0 && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-purple-500 inline-block" />Domains ({breakdown.domains})</span>}
+                {breakdown.emails   > 0 && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Emails ({breakdown.emails})</span>}
+                {breakdown.ai       > 0 && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-pink-500 inline-block" />AI ({breakdown.ai})</span>}
+                {breakdown.other    > 0 && <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-gray-500 inline-block" />Other ({breakdown.other})</span>}
+              </div>
+            </>
+          )}
+
+          <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
+            <span className="text-sm text-gray-400">{tokenBalance.toLocaleString()} tokens remaining</span>
+            <span className="text-xs text-gray-500">{lifetimeSpent.toLocaleString()} spent all time</span>
+          </div>
+        </div>
+
+        {/* Cost preview widget */}
+        <div className="p-5 rounded-xl bg-[#111] border border-white/10">
+          <h3 className="font-semibold text-white mb-4">Cost Before Action</h3>
+          <p className="text-xs text-gray-500 mb-3">Select an action to see its token cost</p>
+
+          <div className="space-y-1.5 mb-4">
+            {ACTION_COSTS.map((action) => (
+              <button
+                key={action.label}
+                onClick={() => setSelectedAction(action)}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all border ${
+                  selectedAction.label === action.label
+                    ? 'bg-blue-500/15 border-blue-500/30 text-white'
+                    : 'border-transparent hover:border-white/10 text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <span className={selectedAction.label === action.label ? 'text-blue-400' : 'text-gray-500'}>{action.icon}</span>
+                  <span>{action.label}</span>
+                </span>
+                <span className={`font-bold tabular-nums ${selectedAction.label === action.label ? 'text-amber-400' : 'text-gray-500'}`}>
+                  {action.cost}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className={`p-3 rounded-lg border ${canAfford ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-gray-400">Token cost</span>
+              <span className="text-sm font-bold text-amber-400">−{selectedAction.cost} tokens</span>
+            </div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-gray-400">Balance after</span>
+              <span className={`text-sm font-bold tabular-nums ${canAfford ? 'text-white' : 'text-red-400'}`}>
+                {(tokenBalance - selectedAction.cost).toLocaleString()}
+              </span>
+            </div>
+            <div className={`text-xs font-semibold text-center py-1 rounded ${canAfford ? 'text-green-400' : 'text-red-400'}`}>
+              {loading ? '…' : canAfford ? 'You can afford this action' : 'Insufficient tokens'}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom row */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {/* Recent activity */}
+        <div className="lg:col-span-2 p-5 rounded-xl bg-[#111] border border-white/10">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-white">Recent Activity</h3>
+            <Link href="/dashboard/usage" className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+              View all →
+            </Link>
+          </div>
+
+          {loading ? (
+            <div className="space-y-3">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3 py-2">
+                  <div className="w-8 h-8 bg-white/10 rounded-lg animate-pulse shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3 w-40 bg-white/10 rounded animate-pulse" />
+                    <div className="h-2.5 w-24 bg-white/10 rounded animate-pulse" />
+                  </div>
+                  <div className="h-3 w-12 bg-white/10 rounded animate-pulse" />
+                </div>
+              ))}
+            </div>
+          ) : recentActivity.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500 text-sm">No activity yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {recentActivity.map((tx, i) => {
+                const { icon, color } = txIcon(tx);
+                return (
+                  <div key={tx.id} className={`flex items-center gap-3 py-3 ${i < recentActivity.length - 1 ? 'border-b border-white/5' : ''}`}>
+                    <div className={`w-8 h-8 rounded-lg bg-[#1a1a1a] flex items-center justify-center flex-shrink-0 ${color}`}>
+                      {icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white font-medium">{tx.description}</p>
+                      <p className="text-xs text-gray-500">{timeAgo(tx.createdAt)}</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className={`text-sm font-bold tabular-nums ${tx.amount > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {tx.amount > 0 ? '+' : ''}{tx.amount}
+                      </p>
+                      <p className="text-xs text-gray-600">{tx.balanceAfter} left</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Quick actions */}
+        <div className="p-5 rounded-xl bg-[#111] border border-white/10">
+          <h3 className="font-semibold text-white mb-4">Quick Actions</h3>
+
+          <div className="space-y-3">
+            <Link
+              href="/dashboard/websites"
+              className="flex items-center gap-3 p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 hover:border-blue-500/30 transition-all group"
+            >
+              <div className="w-9 h-9 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 flex-shrink-0 group-hover:bg-blue-500/30 transition-colors">
+                <IconGlobe className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white">Create Website</p>
+                <p className="text-xs text-gray-500">50 tokens</p>
+              </div>
+              <svg className="w-4 h-4 text-gray-600 group-hover:text-blue-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+
+            <Link
+              href="/dashboard/domains"
+              className="flex items-center gap-3 p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20 hover:border-purple-500/30 transition-all group"
+            >
+              <div className="w-9 h-9 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400 flex-shrink-0 group-hover:bg-purple-500/30 transition-colors">
+                <IconLink className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white">Add Domain</p>
+                <p className="text-xs text-gray-500">20 tokens</p>
+              </div>
+              <svg className="w-4 h-4 text-gray-600 group-hover:text-purple-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+
+            <Link
+              href="/dashboard/emails"
+              className="flex items-center gap-3 p-3.5 rounded-xl bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 hover:border-green-500/30 transition-all group"
+            >
+              <div className="w-9 h-9 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 flex-shrink-0 group-hover:bg-green-500/30 transition-colors">
+                <IconMail className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white">Set Up Email</p>
+                <p className="text-xs text-gray-500">10 tokens</p>
+              </div>
+              <svg className="w-4 h-4 text-gray-600 group-hover:text-green-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+
+            <div className="pt-2 border-t border-white/5">
+              <Link
+                href="/dashboard/tokens"
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-amber-400/10 border border-amber-400/20 hover:bg-amber-400/15 hover:border-amber-400/30 text-amber-400 text-sm font-semibold transition-all"
+              >
+                <IconCoin className="w-4 h-4" />
+                Top Up Tokens
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

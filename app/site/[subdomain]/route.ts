@@ -10,7 +10,7 @@ import { prisma } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
-const platformDomain = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || 'velocitysites.com.au'
+const platformDomain: string = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || 'velocitysites.com.au'
 
 function comingSoonHtml(name: string, subdomain: string): string {
   return `<!DOCTYPE html>
@@ -74,7 +74,9 @@ function comingSoonHtml(name: string, subdomain: string): string {
 </html>`
 }
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ subdomain: string }> }) {
+type RouteContext = { params: Promise<{ subdomain: string }> }
+
+export async function GET(_request: NextRequest, { params }: RouteContext): Promise<Response> {
   const { subdomain } = await params
 
   try {
@@ -87,11 +89,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return new Response('Not found', { status: 404 })
     }
 
-    const html = website.generatedHtml || comingSoonHtml(website.name, subdomain)
+    const isDraft = (website.status as string) === 'DRAFT' || website.status === 'BUILDING'
+    const html    = website.generatedHtml || comingSoonHtml(website.name, subdomain)
 
     return new Response(html, {
       status:  200,
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: {
+        'Content-Type':  'text/html; charset=utf-8',
+        // Prevent search engines from indexing unpublished sites
+        ...(isDraft ? { 'X-Robots-Tag': 'noindex, nofollow' } : {}),
+      },
     })
   } catch (error) {
     console.error('[GET /site/[subdomain]]', error)
