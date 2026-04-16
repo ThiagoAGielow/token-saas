@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import TokenBalance from '@/components/TokenBalance';
 import OnboardingModal from '@/components/OnboardingModal';
+import SidebarAIChat from '@/components/SidebarAIChat';
 
 // TODO: replace with real data from API/context
 const MOCK_USER = {
@@ -193,6 +194,9 @@ export default function DashboardLayout({ children }) {
             <span className="text-amber-400 flex-shrink-0">{BUY_TOKENS_ITEM.icon}</span>
             <span>{BUY_TOKENS_ITEM.label}</span>
           </Link>
+
+          {/* AI Assistant */}
+          <SidebarAIChat />
         </nav>
 
         {/* Token Balance */}
