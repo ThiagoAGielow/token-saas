@@ -240,6 +240,12 @@ model Website {
   /// Token cost to create this website
   tokenCost     Int           @default(50)
 
+  /// GitHub repository name under the platform org (e.g. "site-my-shop")
+  githubRepo    String?
+
+  /// Full GitHub repository URL
+  githubRepoUrl String?
+
   publishedAt   DateTime?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt

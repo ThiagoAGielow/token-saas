@@ -12,7 +12,8 @@ import { NextResponse }   from 'next/server'
 import { prisma }         from '@/lib/db'
 import { getOrCreateUser } from '@/lib/user'
 import { spendTokens, getBalance, TOKEN_COSTS } from '@/lib/tokens'
-import { callAI }         from '@/lib/ai'
+import { callAI }             from '@/lib/ai'
+import { provisionSiteRepo }  from '@/lib/github'
 
 const SUBDOMAIN_RE = /^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/
 
@@ -43,15 +44,17 @@ export async function GET() {
     const websites = await prisma.website.findMany({
       where:   { userId: user.id },
       select: {
-        id:          true,
-        name:        true,
-        subdomain:   true,
-        status:      true,
-        tokenCost:   true,
-        prompt:      true,
-        publishedAt: true,
-        createdAt:   true,
-        updatedAt:   true,
+        id:            true,
+        name:          true,
+        subdomain:     true,
+        status:        true,
+        tokenCost:     true,
+        prompt:        true,
+        githubRepo:    true,
+        githubRepoUrl: true,
+        publishedAt:   true,
+        createdAt:     true,
+        updatedAt:     true,
         domain: {
           select: { domain: true, verified: true },
         },
@@ -157,13 +160,31 @@ export async function POST(request) {
       )
     }
 
+    // ── Provision GitHub repo ──────────────────────────────────────────────
+    let githubRepo    = null
+    let githubRepoUrl = null
+    try {
+      const gh = await provisionSiteRepo({
+        name:          name.trim(),
+        subdomain:     cleanSubdomain,
+        generatedHtml,
+      })
+      githubRepo    = gh.repoName
+      githubRepoUrl = gh.repoUrl
+    } catch (ghError) {
+      // GitHub failure is non-fatal — site still works via subdomain from DB
+      console.error('[POST /api/websites] GitHub provisioning failed:', ghError)
+    }
+
     // ── Save HTML + mark ACTIVE ────────────────────────────────────────────
     const updated = await prisma.website.update({
       where: { id: website.id },
       data:  {
         generatedHtml,
-        status:      'ACTIVE',
-        publishedAt: new Date(),
+        status:       'ACTIVE',
+        publishedAt:  new Date(),
+        ...(githubRepo    ? { githubRepo }    : {}),
+        ...(githubRepoUrl ? { githubRepoUrl } : {}),
       },
       select: {
         id:          true,
