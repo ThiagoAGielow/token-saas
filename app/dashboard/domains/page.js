@@ -319,14 +319,24 @@ export default function DomainsPage() {
                     </a>
                   </td>
                   <td className="px-5 py-4">
-                    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${
-                      site.status === 'ACTIVE'
-                        ? 'bg-green-500/15 text-green-400 border-green-500/25'
-                        : 'bg-yellow-500/15 text-yellow-400 border-yellow-500/25'
-                    }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${site.status === 'ACTIVE' ? 'bg-green-400' : 'bg-yellow-400'}`} />
-                      {site.status === 'ACTIVE' ? 'Live' : 'Building'}
-                    </span>
+                    {site.status === 'ACTIVE' && (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border bg-green-500/15 text-green-400 border-green-500/25">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                        Live
+                      </span>
+                    )}
+                    {site.status === 'DRAFT' && (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border bg-blue-500/15 text-blue-400 border-blue-500/25">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                        Draft
+                      </span>
+                    )}
+                    {(site.status === 'BUILDING' || site.status === 'PAUSED') && (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border bg-yellow-500/15 text-yellow-400 border-yellow-500/25">
+                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
+                        {site.status === 'PAUSED' ? 'Paused' : 'Building'}
+                      </span>
+                    )}
                   </td>
                   <td className="px-5 py-4 text-right">
                     {deleteConfirm === site.id ? (
