@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 interface BalanceResponse {
-  balance: number;
-  daysRemaining: number | null;
+  wallet?: { balance?: number };
+  daysRemaining?: number | null;
 }
 
 export default function TokenBalance() {
@@ -16,8 +16,8 @@ export default function TokenBalance() {
     fetch('/api/tokens')
       .then((r) => r.json() as Promise<BalanceResponse>)
       .then((data) => {
-        setBalance(data.balance);
-        setDaysRemaining(data.daysRemaining);
+        setBalance(data.wallet?.balance ?? null);
+        setDaysRemaining(data.daysRemaining ?? null);
       })
       .catch(() => {
         // Silently fail — balance will show as "—"
@@ -25,7 +25,7 @@ export default function TokenBalance() {
   }, []);
 
   const isLow = balance !== null && balance < 50;
-  const formattedBalance = balance === null ? '—' : balance.toLocaleString();
+  const formattedBalance = balance == null ? '—' : balance.toLocaleString();
 
   return (
     <div className="flex items-center gap-3">
