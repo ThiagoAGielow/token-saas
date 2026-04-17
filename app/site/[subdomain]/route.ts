@@ -89,7 +89,7 @@ export async function GET(_request: NextRequest, { params }: RouteContext): Prom
       return new Response('Not found', { status: 404 })
     }
 
-    const isDraft = (website.status as string) === 'DRAFT' || website.status === 'BUILDING'
+    const isDraft = website.status === 'DRAFT' || website.status === 'BUILDING'
     const html    = website.generatedHtml || comingSoonHtml(website.name, subdomain)
 
     return new Response(html, {

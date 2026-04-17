@@ -93,6 +93,7 @@ function IcoAgency() {
   );
 }
 
+<<<<<<< HEAD:app/dashboard/layout.tsx
 type NavItemData = {
   labelKey: string;
   href: string;
@@ -117,6 +118,22 @@ const NAV_ITEMS: NavItemData[] = [
 const BUY_TOKENS_HREF = '/dashboard/tokens';
 
 function NavItem({ item, pathname, t }: { item: NavItemData; pathname: string; t: Translate }) {
+=======
+const NAV_ITEMS = [
+  { labelKey: 'nav_overview',  href: '/dashboard',           icon: <IcoOverview />,  exact: true },
+  { labelKey: 'nav_websites',  href: '/dashboard/websites',  icon: <IcoWebsites />,  badge: '3' },
+  { labelKey: 'nav_domains',   href: '/dashboard/domains',   icon: <IcoDomains />,   badge: '2' },
+  { labelKey: 'nav_emails',    href: '/dashboard/emails',    icon: <IcoEmails />,    badge: '5' },
+  { labelKey: 'nav_agency',    href: '/dashboard/agency',    icon: <IcoAgency /> },
+  { labelKey: 'nav_apiKeys',   href: '/dashboard/api-keys',  icon: <IcoApiKeys /> },
+  { labelKey: 'nav_usage',     href: '/dashboard/usage',     icon: <IcoUsage /> },
+  { labelKey: 'nav_settings',  href: '/dashboard/settings',  icon: <IcoSettings /> },
+];
+
+const BUY_TOKENS_HREF = '/dashboard/tokens';
+
+function NavItem({ item, pathname, t }) {
+>>>>>>> main:app/dashboard/layout.js
   const isActive = item.exact
     ? pathname === item.href
     : pathname.startsWith(item.href);
@@ -145,7 +162,11 @@ function NavItem({ item, pathname, t }: { item: NavItemData; pathname: string; t
 
 // ─── Inner layout (needs access to LanguageContext) ───────────────────────────
 
+<<<<<<< HEAD:app/dashboard/layout.tsx
 function DashboardInner({ children }: { children: React.ReactNode }) {
+=======
+function DashboardInner({ children }) {
+>>>>>>> main:app/dashboard/layout.js
   const pathname = usePathname();
   const { t }    = useLanguage();
 
@@ -290,10 +311,18 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
 
 // ─── Outer layout — wraps with LanguageProvider ───────────────────────────────
 
+<<<<<<< HEAD:app/dashboard/layout.tsx
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+=======
+export default function DashboardLayout({ children }) {
+>>>>>>> main:app/dashboard/layout.js
   return (
     <LanguageProvider>
       <DashboardInner>{children}</DashboardInner>
     </LanguageProvider>
   );
+<<<<<<< HEAD:app/dashboard/layout.tsx
 }
+=======
+}
+>>>>>>> main:app/dashboard/layout.js
