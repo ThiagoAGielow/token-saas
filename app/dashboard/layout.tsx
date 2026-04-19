@@ -8,13 +8,9 @@ import OnboardingModal from '@/components/OnboardingModal';
 import SidebarAIChat from '@/components/SidebarAIChat';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { LanguageProvider, useLanguage, type TranslationKey } from '@/contexts/LanguageContext';
-
-// TODO: replace with real data from API/context
-const MOCK_USER = {
-  name: 'Thiago',
-  email: 'thiago@example.com',
-  plan: 'Growth',
-};
+import { UserButton } from '@clerk/nextjs';
+import { useState, useEffect } from 'react';
+import { useUser } from '@clerk/nextjs';
 
 // ─── SVG Icon components ──────────────────────────────────────────────────────
 // Explicit width/height ensures correct size even if CSS classes fail to load.
@@ -159,7 +155,19 @@ function NavItem({ item, pathname, t }: NavItemProps) {
 
 function DashboardInner({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { t }    = useLanguage();
+  const { t } = useLanguage();
+  const { user } = useUser();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Close mobile menu when route changes
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
+  // Get user data from Clerk
+  const userName = user?.fullName || user?.firstName || 'User';
+  const userEmail = user?.primaryEmailAddress?.emailAddress || '';
+  const userPlan = 'Growth'; // TODO: fetch from your database based on user subscription
 
   const getPageTitle = () => {
     if (pathname === '/dashboard')                       return t('page_overview');
@@ -175,26 +183,46 @@ function DashboardInner({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="flex h-screen bg-[#0a0a0a] text-white overflow-hidden" style={{ minWidth: '900px' }}>
+    <div className="flex h-screen bg-[#0a0a0a] text-white overflow-hidden">
       <OnboardingModal />
+
+      {/* Mobile backdrop */}
+      {mobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
 
       {/* Sidebar */}
       <aside
-        className="flex flex-col flex-shrink-0 border-r border-white/10"
+        className={`
+          fixed lg:relative inset-y-0 left-0 z-50
+          flex flex-col flex-shrink-0 border-r border-white/10 bg-[#0a0a0a]
+          transition-transform duration-300 ease-in-out
+          ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        `}
         style={{ width: '240px' }}
       >
         {/* Logo */}
         <div className="flex items-center gap-2.5 px-4 h-16 border-b border-white/10 flex-shrink-0">
-          <div
-            className="rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-black"
-            style={{ width: '32px', height: '32px', fontSize: '14px' }}
-          >
+          <div className="rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-black" style={{ width: '32px', height: '32px', fontSize: '14px' }}>
             V
           </div>
           <span className="font-bold text-white text-base tracking-tight">TokenFlow</span>
           <span className="ml-auto text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 font-medium">
-            {MOCK_USER.plan}
+            {userPlan}
           </span>
+          
+          {/* Mobile close button */}
+          <button
+            onClick={() => setMobileMenuOpen(false)}
+            className="lg:hidden ml-2 p-1 text-gray-400 hover:text-white"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         {/* Navigation */}
@@ -234,11 +262,11 @@ function DashboardInner({ children }: { children: ReactNode }) {
               className="rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center text-white font-bold flex-shrink-0"
               style={{ width: '32px', height: '32px', fontSize: '14px' }}
             >
-              {MOCK_USER.name.charAt(0)}
+              {userName.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">{MOCK_USER.name}</p>
-              <p className="text-xs text-gray-500 truncate">{MOCK_USER.email}</p>
+              <p className="text-sm font-medium text-white truncate">{userName}</p>
+              <p className="text-xs text-gray-500 truncate">{userEmail}</p>
             </div>
             <button className="text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0">
               <svg width="16" height="16" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -251,22 +279,29 @@ function DashboardInner({ children }: { children: ReactNode }) {
       </aside>
 
       {/* Main content area */}
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden" style={{ minWidth: 0 }}>
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         {/* Top bar */}
-        <header className="flex items-center justify-between px-6 h-16 border-b border-white/10 bg-[#0a0a0a] flex-shrink-0">
+        <header className="flex items-center justify-between px-4 lg:px-6 h-16 border-b border-white/10 bg-[#0a0a0a] flex-shrink-0">
           <div className="flex items-center gap-3">
+            {/* Mobile hamburger */}
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="lg:hidden p-2 -ml-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            
             <h1 className="text-lg font-semibold text-white">{getPageTitle()}</h1>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 lg:gap-3">
             {/* Language switcher */}
             <LanguageSwitcher />
 
-            {/* Notification bell */}
-            <button
-              className="relative rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/5 transition-colors border border-transparent hover:border-white/10"
-              style={{ width: '36px', height: '36px' }}
-            >
+            {/* Notification bell - hide on small mobile */}
+            <button className="hidden sm:flex relative rounded-lg items-center justify-center text-gray-400 hover:text-white hover:bg-white/5 transition-colors border border-transparent hover:border-white/10" style={{ width: '36px', height: '36px' }}>
               <svg width="20" height="20" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
@@ -274,24 +309,23 @@ function DashboardInner({ children }: { children: ReactNode }) {
             </button>
 
             {/* User avatar */}
-            <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 cursor-pointer transition-colors">
-              <div
-                className="rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center text-white font-bold"
-                style={{ width: '28px', height: '28px', fontSize: '12px' }}
-              >
-                {MOCK_USER.name.charAt(0)}
-              </div>
-              <span className="text-sm text-gray-300 font-medium">{MOCK_USER.name}</span>
-              <svg width="14" height="14" className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
+            <UserButton 
+              afterSignOutUrl="/"
+              appearance={{
+                elements: {
+                  avatarBox: "w-7 h-7",
+                  userButtonPopoverCard: "bg-[#111] border border-white/10",
+                  userButtonPopoverActionButton: "hover:bg-white/5",
+                  userButtonPopoverActionButtonText: "text-gray-300",
+                }
+              }}
+            />
           </div>
         </header>
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto bg-[#0a0a0a]">
-          <div className="p-6">
+          <div className="p-4 lg:p-6">
             {children}
           </div>
         </main>
