@@ -37,6 +37,7 @@ function TokensContent() {
   const [error, setError]                   = useState<string | null>(null);
   const [referralCopied, setReferralCopied] = useState(false);
   const [successToast, setSuccessToast]     = useState(false);
+  const [referralLink, setReferralLink]     = useState('');
 
   const loadData = useCallback(() => {
     return Promise.all([
@@ -52,6 +53,10 @@ function TokensContent() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  useEffect(() => {
+    setReferralLink(`${window.location.origin}/ref/user`);
+  }, []);
 
   useEffect(() => {
     if (searchParams.get('checkout') === 'success') {
@@ -79,10 +84,6 @@ function TokensContent() {
       setCheckingOut(null);
     }
   };
-
-  const referralLink = typeof window !== 'undefined'
-    ? `${window.location.origin}/ref/user`
-    : '';
 
   const handleCopyReferral = () => {
     navigator.clipboard.writeText(referralLink);
