@@ -1,5 +1,6 @@
 'use client'
 
+import { Suspense } from 'react'
 import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
@@ -10,7 +11,7 @@ interface JoinResponse {
   error?: string
 }
 
-export default function JoinPage() {
+function JoinContent() {
   const searchParams  = useSearchParams()
   const router        = useRouter()
   const { isLoaded, isSignedIn } = useAuth()
@@ -90,5 +91,17 @@ export default function JoinPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function JoinPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+        <div className="w-12 h-12 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <JoinContent />
+    </Suspense>
   )
 }
