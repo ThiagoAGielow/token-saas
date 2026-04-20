@@ -158,6 +158,7 @@ function DashboardInner({ children }: { children: ReactNode }) {
   const { t } = useLanguage();
   const { user } = useUser();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Close mobile menu when route changes
   useEffect(() => {
@@ -199,20 +200,30 @@ function DashboardInner({ children }: { children: ReactNode }) {
         className={`
           fixed lg:relative inset-y-0 left-0 z-50
           flex flex-col flex-shrink-0 border-r border-white/10 bg-[#0a0a0a]
-          transition-transform duration-300 ease-in-out
+          transition-all duration-300 ease-in-out
           ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
-        style={{ width: '240px' }}
+        style={{ width: sidebarCollapsed ? '80px' : '240px' }}
       >
         {/* Logo */}
         <div className="flex items-center gap-2.5 px-4 h-16 border-b border-white/10 flex-shrink-0">
-          <div className="rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-black" style={{ width: '32px', height: '32px', fontSize: '14px' }}>
-            V
-          </div>
-          <span className="font-bold text-white text-base tracking-tight">TokenFlow</span>
-          <span className="ml-auto text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 font-medium">
-            {userPlan}
-          </span>
+          {!sidebarCollapsed && (
+            <>
+              <div className="rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-black" style={{ width: '32px', height: '32px', fontSize: '14px' }}>
+                V
+              </div>
+              <span className="font-bold text-white text-base tracking-tight">TokenFlow</span>
+              <span className="ml-auto text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 font-medium">
+                {userPlan}
+              </span>
+            </>
+          )}
+          
+          {sidebarCollapsed && (
+            <div className="rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-black mx-auto" style={{ width: '32px', height: '32px', fontSize: '14px' }}>
+              V
+            </div>
+          )}
           
           {/* Mobile close button */}
           <button
@@ -228,7 +239,38 @@ function DashboardInner({ children }: { children: ReactNode }) {
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
           {NAV_ITEMS.map((item) => (
-            <NavItem key={item.href} item={item} pathname={pathname} t={t} />
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group ${
+                (item.exact ? pathname === item.href : pathname.startsWith(item.href))
+                  ? 'bg-blue-500/15 text-blue-400 border border-blue-500/20'
+                  : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
+              }`}
+              title={sidebarCollapsed ? t(item.labelKey) : undefined}
+            >
+              <span className={`flex-shrink-0 transition-colors ${
+                (item.exact ? pathname === item.href : pathname.startsWith(item.href))
+                  ? 'text-blue-400'
+                  : 'text-gray-500 group-hover:text-gray-300'
+              }`}>
+                {item.icon}
+              </span>
+              {!sidebarCollapsed && (
+                <>
+                  <span className="flex-1">{t(item.labelKey)}</span>
+                  {item.badge && (
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
+                      (item.exact ? pathname === item.href : pathname.startsWith(item.href))
+                        ? 'bg-blue-500/20 text-blue-300'
+                        : 'bg-white/10 text-gray-400'
+                    }`}>
+                      {item.badge}
+                    </span>
+                  )}
+                </>
+              )}
+            </Link>
           ))}
 
           <div className="my-3 border-t border-white/10" />
@@ -241,41 +283,67 @@ function DashboardInner({ children }: { children: ReactNode }) {
                 ? 'bg-amber-400/15 text-amber-300 border-amber-400/30'
                 : 'text-amber-400 hover:bg-amber-400/10 border-amber-400/20 hover:border-amber-400/30'
             }`}
+            title={sidebarCollapsed ? t('nav_buyTokens') : undefined}
           >
             <span className="text-amber-400 flex-shrink-0"><IcoCoin /></span>
-            <span>{t('nav_buyTokens')}</span>
+            {!sidebarCollapsed && <span>{t('nav_buyTokens')}</span>}
           </Link>
 
           {/* AI Assistant */}
-          <SidebarAIChat />
+          {!sidebarCollapsed && <SidebarAIChat />}
         </nav>
 
         {/* Token Balance */}
-        <div className="px-3 pb-3 flex-shrink-0">
-          <TokenBalance />
-        </div>
+        {!sidebarCollapsed && (
+          <div className="px-3 pb-3 flex-shrink-0">
+            <TokenBalance />
+          </div>
+        )}
 
         {/* User section */}
         <div className="px-3 pb-4 flex-shrink-0 border-t border-white/10 pt-3">
-          <div className="flex items-center gap-3 px-2">
-            <div
-              className="rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center text-white font-bold flex-shrink-0"
-              style={{ width: '32px', height: '32px', fontSize: '14px' }}
-            >
-              {userName.charAt(0).toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">{userName}</p>
-              <p className="text-xs text-gray-500 truncate">{userEmail}</p>
-            </div>
-            <button className="text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0">
-              <svg width="16" height="16" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
+          <div className={`flex items-center gap-3 ${sidebarCollapsed ? 'justify-center' : 'px-2'}`}>
+            {sidebarCollapsed ? (
+              <div
+                className="rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center text-white font-bold flex-shrink-0"
+                style={{ width: '32px', height: '32px', fontSize: '14px' }}
+                title={userName}
+              >
+                {userName.charAt(0).toUpperCase()}
+              </div>
+            ) : (
+              <>
+                <div
+                  className="rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center text-white font-bold flex-shrink-0"
+                  style={{ width: '32px', height: '32px', fontSize: '14px' }}
+                >
+                  {userName.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white truncate">{userName}</p>
+                  <p className="text-xs text-gray-500 truncate">{userEmail}</p>
+                </div>
+                <button className="text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0">
+                  <svg width="16" height="16" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </button>
+              </>
+            )}
           </div>
         </div>
+
+        {/* Desktop collapse toggle */}
+        <button
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          className="hidden lg:flex absolute -right-3 top-20 w-6 h-6 rounded-full bg-[#0a0a0a] border border-white/10 items-center justify-center text-gray-400 hover:text-white hover:bg-white/5 transition-colors z-10"
+          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          <svg className={`w-3 h-3 transition-transform ${sidebarCollapsed ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
       </aside>
 
       {/* Main content area */}

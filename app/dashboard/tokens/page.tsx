@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react'
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import TokenBalance from '@/components/TokenBalance';
@@ -21,7 +22,7 @@ const PLAN_FEATURES: Record<'starter' | 'growth', string[]> = {
   growth:  ['8,000 tokens/month', '20% rollover', 'Priority support', 'Unlimited websites', 'API access', 'White-label'],
 };
 
-export default function TokensPage() {
+function TokensContent() {
   const searchParams = useSearchParams();
   const router       = useRouter();
 
@@ -36,6 +37,7 @@ export default function TokensPage() {
   const [error, setError]                   = useState<string | null>(null);
   const [referralCopied, setReferralCopied] = useState(false);
   const [successToast, setSuccessToast]     = useState(false);
+  const [referralLink, setReferralLink]     = useState('');
 
   const loadData = useCallback(() => {
     return Promise.all([
@@ -51,6 +53,10 @@ export default function TokensPage() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  useEffect(() => {
+    setReferralLink(`${window.location.origin}/ref/user`);
+  }, []);
 
   useEffect(() => {
     if (searchParams.get('checkout') === 'success') {
@@ -79,10 +85,6 @@ export default function TokensPage() {
     }
   };
 
-  const referralLink = typeof window !== 'undefined'
-    ? `${window.location.origin}/ref/user`
-    : '';
-
   const handleCopyReferral = () => {
     navigator.clipboard.writeText(referralLink);
     setReferralCopied(true);
@@ -93,7 +95,6 @@ export default function TokensPage() {
 
   return (
     <div className="space-y-6 max-w-4xl">
-
       {/* Purchase success toast */}
       {successToast && (
         <div className="fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-4 rounded-xl bg-green-500/10 border border-green-500/30 text-green-400 shadow-xl animate-in slide-in-from-top-2 duration-300">
@@ -308,5 +309,17 @@ export default function TokensPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function TokensPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <TokensContent />
+    </Suspense>
   );
 }
