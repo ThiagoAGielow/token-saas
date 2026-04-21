@@ -250,14 +250,18 @@ function FeaturesGrid() {
   const { t } = useLanguage();
 
   type BadgeColor = 'amber' | 'sky' | 'green';
+  interface Feature {
+    icon: string; title: string | string[]; desc: string | string[];
+    badge: string | string[]; badgeColor: BadgeColor;
+  }
 
-  const features = [
-    { icon: '🤖', title: t('land_feat_1_title'), desc: t('land_feat_1_desc'), badge: '50 tokens', badgeColor: 'amber' as BadgeColor },
-    { icon: '🌐', title: t('land_feat_2_title'), desc: t('land_feat_2_desc'), badge: '20 tokens', badgeColor: 'amber' as BadgeColor },
-    { icon: '📧', title: t('land_feat_3_title'), desc: t('land_feat_3_desc'), badge: '10 tokens', badgeColor: 'amber' as BadgeColor },
-    { icon: '🔌', title: t('land_feat_4_title'), desc: t('land_feat_4_desc'), badge: 'Growth+',   badgeColor: 'sky'   as BadgeColor },
-    { icon: '👛', title: t('land_feat_5_title'), desc: t('land_feat_5_desc'), badge: t('land_feat_badge_allPlans'), badgeColor: 'green' as BadgeColor },
-    { icon: '🏷️', title: t('land_feat_6_title'), desc: t('land_feat_6_desc'), badge: 'Growth+',   badgeColor: 'sky'   as BadgeColor },
+  const features: Feature[] = [
+    { icon: '🤖', title: t('land_feat_1_title'), desc: t('land_feat_1_desc'), badge: '50 tokens',               badgeColor: 'amber' },
+    { icon: '🌐', title: t('land_feat_2_title'), desc: t('land_feat_2_desc'), badge: '20 tokens',               badgeColor: 'amber' },
+    { icon: '📧', title: t('land_feat_3_title'), desc: t('land_feat_3_desc'), badge: '10 tokens',               badgeColor: 'amber' },
+    { icon: '🔌', title: t('land_feat_4_title'), desc: t('land_feat_4_desc'), badge: 'Growth+',                 badgeColor: 'sky'   },
+    { icon: '👛', title: t('land_feat_5_title'), desc: t('land_feat_5_desc'), badge: t('land_feat_badge_allPlans'), badgeColor: 'green' },
+    { icon: '🏷️', title: t('land_feat_6_title'), desc: t('land_feat_6_desc'), badge: 'Growth+',                 badgeColor: 'sky'   },
   ];
 
   const badgeStyles: Record<BadgeColor, string> = {
@@ -280,8 +284,8 @@ function FeaturesGrid() {
           </h2>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {features.map(({ icon, title, desc, badge, badgeColor }) => (
-            <div key={title} className="bg-[#111111] border border-white/5 rounded-2xl p-7 card-surface-hover group flex flex-col gap-4">
+          {features.map(({ icon, title, desc, badge, badgeColor }, index) => (
+            <div key={index} className="bg-[#111111] border border-white/5 rounded-2xl p-7 card-surface-hover group flex flex-col gap-4">
               <div className="flex items-start justify-between">
                 <span className="text-3xl">{icon}</span>
                 <span className={cn('text-xs font-semibold border rounded-full px-2.5 py-1', badgeStyles[badgeColor])}>{badge}</span>
@@ -307,7 +311,7 @@ interface PricingCardProps {
   tokens: string;
   features: string[];
   cta: string;
-  highlight?: boolean;
+  highlight: boolean;
   badge?: string;
 }
 
@@ -502,8 +506,8 @@ function ReferralBanner() {
             <div className="text-5xl">🤝</div>
             <div>
               <h2 className="text-3xl sm:text-4xl font-extrabold mb-2">
-                {(t('land_ref_title') as string).split('50 tokens').length > 1
-                  ? (t('land_ref_title') as string).split('50 tokens').map((part: string, i: number, arr: string[]) =>
+                {t('land_ref_title').split('50 tokens').length > 1
+                  ? t('land_ref_title').split('50 tokens').map((part: string, i: number, arr: string[]) =>
                       i < arr.length - 1
                         ? <span key={i}>{part}<span className="text-gradient-amber">50 tokens</span></span>
                         : <span key={i}>{part}</span>
@@ -635,7 +639,7 @@ function Footer() {
             <div key={heading}>
               <h4 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">{heading}</h4>
               <ul className="space-y-2.5">
-                {(links as string[]).map((l: string) => (
+                {links.map((l: string) => (
                   <li key={l}><a href="#" className="text-sm text-slate-400 hover:text-white transition-colors">{l}</a></li>
                 ))}
               </ul>

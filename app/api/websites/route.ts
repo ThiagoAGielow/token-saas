@@ -6,6 +6,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const dynamic = 'force-dynamic'
+export const revalidate = 0 // Add caching for 30 seconds
 
 import { auth }           from '@clerk/nextjs/server'
 import { NextResponse }   from 'next/server'
@@ -180,7 +181,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       // Continue without GitHub - can retry later
     }
 
-    await prisma.website.update({
+    const updated = await prisma.website.update({
       where: { id: website.id },
       data: {
         generatedHtml,
@@ -188,6 +189,18 @@ export async function POST(request: Request): Promise<NextResponse> {
         githubRepoUrl,
         status: WebsiteStatus.ACTIVE,
         publishedAt: new Date(),
+      },
+      select: {
+        id: true,
+        name: true,
+        subdomain: true,
+        status: true,
+        githubRepo: true,
+        githubRepoUrl: true,
+        vercelProjectId: true,
+        vercelUrl: true,
+        publishedAt: true,
+        createdAt: true,
       },
     })
 
