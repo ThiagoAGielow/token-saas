@@ -24,8 +24,18 @@ const PROVIDERS: { value: Provider; label: string }[] = [
 
 // Strip <HTML_UPDATE>...</HTML_UPDATE> from displayed assistant messages
 function displayContent(content: string) {
-  return content.replace(/<HTML_UPDATE>[\s\S]*?<\/HTML_UPDATE>/gi, '').trim()
-    || '✓ Website updated.';
+  const stripped = content.replace(/<HTML_UPDATE>[\s\S]*?<\/HTML_UPDATE>/gi, '').trim();
+  
+  // If there's actual text content, show it
+  if (stripped) return stripped;
+  
+  // If only HTML_UPDATE tags (no text), show update confirmation
+  if (/<HTML_UPDATE>/i.test(content)) {
+    return '✓ Website updated.';
+  }
+  
+  // Fallback for empty responses
+  return content || 'No response';
 }
 
 export default function WebsiteChatPage({ params }: { params: Promise<{ id: string }> }) {
@@ -392,8 +402,8 @@ function Message({ msg }: { msg: ChatMessage }) {
     );
   }
 
-  const text = displayContent(msg.content);
   const hadHtmlUpdate = /<HTML_UPDATE>/i.test(msg.content);
+  const text = msg.content.replace(/<HTML_UPDATE>[\s\S]*?<\/HTML_UPDATE>/gi, '').trim();
 
   return (
     <div className="flex gap-3">
@@ -404,15 +414,28 @@ function Message({ msg }: { msg: ChatMessage }) {
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-xs text-gray-500 mb-1">AI Assistant</p>
-        <div className={`text-sm leading-relaxed whitespace-pre-wrap ${msg.isError ? 'text-red-400' : 'text-gray-200'}`}>
-          {text}
-        </div>
+        
+        {/* Show AI's explanation if it exists */}
+        {text && (
+          <div className={`text-sm leading-relaxed whitespace-pre-wrap mb-2 ${msg.isError ? 'text-red-400' : 'text-gray-200'}`}>
+            {text}
+          </div>
+        )}
+        
+        {/* Show update badge */}
         {hadHtmlUpdate && (
-          <div className="mt-2 flex items-center gap-1.5 text-xs text-green-400">
+          <div className="flex items-center gap-1.5 text-xs text-green-400 bg-green-500/10 px-2.5 py-1.5 rounded-lg border border-green-500/20 w-fit">
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
-            Site updated — refresh the preview to see changes
+            Site updated — refresh preview to see changes
+          </div>
+        )}
+        
+        {/* Fallback if no text and no HTML update */}
+        {!text && !hadHtmlUpdate && (
+          <div className="text-sm text-gray-500 italic">
+            No response
           </div>
         )}
       </div>
