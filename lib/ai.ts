@@ -42,7 +42,7 @@ const DEFAULT_PROVIDER: AIProvider = 'claude'
 const MODELS: Record<AIProvider, string> = {
   claude: 'claude-sonnet-4-6',
   openai: 'gpt-4o',
-  gemini: 'gemini-1.5-pro',
+  gemini: 'gemini-2.5-flash',  // ← Change from gemini-1.5-pro
 }
 
 // ─── Key resolution ───────────────────────────────────────────────────────────
@@ -169,7 +169,15 @@ async function callOpenAI({ apiKey, model, system, messages, maxTokens }: Provid
 
 async function callGemini({ apiKey, model, system, messages, maxTokens }: ProviderCallOptions): Promise<string> {
   const client    = new GoogleGenerativeAI(apiKey)
-  const genModel  = client.getGenerativeModel({ model })
+  const genModel  = client.getGenerativeModel({ 
+    model,
+    ...(system ? { 
+      systemInstruction: {
+        role: 'system',
+        parts: [{ text: system }],
+      }
+    } : {}),
+  })
 
   const history = messages.slice(0, -1).map((m) => ({
     role:  m.role === 'assistant' ? 'model' : 'user',
@@ -182,7 +190,6 @@ async function callGemini({ apiKey, model, system, messages, maxTokens }: Provid
   const chat = genModel.startChat({
     history,
     generationConfig: { maxOutputTokens: maxTokens },
-    ...(system ? { systemInstruction: system } : {}),
   })
 
   const result = await chat.sendMessage(last.content)
@@ -229,18 +236,29 @@ async function* streamOpenAI({ apiKey, model, system, messages, maxTokens }: Pro
 
 async function* streamGemini({ apiKey, model, system, messages, maxTokens }: ProviderCallOptions): AsyncGenerator<string, void, unknown> {
   const client   = new GoogleGenerativeAI(apiKey)
-  const genModel = client.getGenerativeModel({ model })
+  const genModel = client.getGenerativeModel({ 
+    model,
+    ...(system ? { 
+      systemInstruction: {
+        role: 'system',
+        parts: [{ text: system }],
+      }
+    } : {}),
+  })
+  
   const history  = messages.slice(0, -1).map((m) => ({
     role:  m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
   }))
+  
   const last = messages[messages.length - 1]
   if (!last) throw new Error('Gemini stream: messages array is empty')
+  
   const chat = genModel.startChat({
     history,
     generationConfig: { maxOutputTokens: maxTokens },
-    ...(system ? { systemInstruction: system } : {}),
   })
+  
   const result = await chat.sendMessageStream(last.content)
   for await (const chunk of result.stream) {
     const text = chunk.text()
