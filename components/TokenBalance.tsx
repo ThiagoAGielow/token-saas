@@ -8,11 +8,19 @@ interface BalanceResponse {
   daysRemaining?: number | null;
 }
 
-export default function TokenBalance() {
-  const [balance, setBalance] = useState<number | null>(null);
+interface TokenBalanceProps {
+  /** Pre-fetched balance from the server layout — skips the client fetch when provided */
+  initialBalance?: number;
+}
+
+export default function TokenBalance({ initialBalance }: TokenBalanceProps = {}) {
+  const [balance, setBalance] = useState<number | null>(initialBalance ?? null);
   const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
 
   useEffect(() => {
+    // If the layout already supplied a balance, skip the fetch entirely
+    if (initialBalance !== undefined) return;
+
     fetch('/api/tokens')
       .then((r) => r.json() as Promise<BalanceResponse>)
       .then((data) => {
@@ -22,7 +30,7 @@ export default function TokenBalance() {
       .catch(() => {
         // Silently fail — balance will show as "—"
       });
-  }, []);
+  }, [initialBalance]);
 
   const isLow = balance !== null && balance < 50;
   const formattedBalance = balance == null ? '—' : balance.toLocaleString();
