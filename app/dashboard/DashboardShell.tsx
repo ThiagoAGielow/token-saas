@@ -53,10 +53,10 @@ function IcoAgency() {
 
 const NAV_ITEMS: Array<{ labelKey: TranslationKey; href: string; icon: ReactNode; exact?: boolean; badge?: string }> = [
   { labelKey: 'nav_overview',  href: '/dashboard',           icon: <IcoOverview />,  exact: true },
-  { labelKey: 'nav_websites',  href: '/dashboard/websites',  icon: <IcoWebsites />,  badge: '3' },
-  { labelKey: 'nav_domains',   href: '/dashboard/domains',   icon: <IcoDomains />,   badge: '2' },
-  { labelKey: 'nav_emails',    href: '/dashboard/emails',    icon: <IcoEmails />,    badge: '5' },
-  { labelKey: 'nav_agency',    href: '/dashboard/agency',    icon: <IcoAgency /> },
+  { labelKey: 'nav_websites',  href: '/dashboard/websites',  icon: <IcoWebsites />, },
+  // { labelKey: 'nav_domains',   href: '/dashboard/domains',   icon: <IcoDomains />,   badge: '2' },
+  // { labelKey: 'nav_emails',    href: '/dashboard/emails',    icon: <IcoEmails />,    badge: '5' },
+  // { labelKey: 'nav_agency',    href: '/dashboard/agency',    icon: <IcoAgency /> },
   { labelKey: 'nav_apiKeys',   href: '/dashboard/api-keys',  icon: <IcoApiKeys /> },
   { labelKey: 'nav_usage',     href: '/dashboard/usage',     icon: <IcoUsage /> },
   { labelKey: 'nav_settings',  href: '/dashboard/settings',  icon: <IcoSettings /> },
