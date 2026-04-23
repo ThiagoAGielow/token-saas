@@ -11,6 +11,7 @@ import type {
   GrantSource,
 } from '@prisma/client'
 import { prisma } from './db'
+import { redis, TTL, balanceKey } from './redis'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -53,9 +54,16 @@ export async function getWallet(userId: string): Promise<TokenWallet> {
 
 /**
  * Returns the current spendable balance for a user.
+ * Cached in Redis for 30 seconds — invalidated by spendTokens / grantTokens.
  */
 export async function getBalance(userId: string): Promise<number> {
+  try {
+    const cached = await redis.get<number>(balanceKey(userId))
+    if (cached !== null) return cached
+  } catch { /* Redis unavailable — fall through */ }
+
   const wallet = await getWallet(userId)
+  try { await redis.setex(balanceKey(userId), TTL.BALANCE, wallet.balance) } catch { /* ignore */ }
   return wallet.balance
 }
 
@@ -123,6 +131,8 @@ export async function grantTokens(
     return [updatedWallet, newGrant] as const
   })
 
+  // Invalidate cached balance
+  try { await redis.del(balanceKey(userId)) } catch { /* ignore */ }
   return { wallet, grant }
 }
 
@@ -179,6 +189,8 @@ export async function spendTokens(
     return updatedWallet.balance
   })
 
+  // Invalidate cached balance
+  try { await redis.del(balanceKey(userId)) } catch { /* ignore */ }
   return newBalance
 }
 

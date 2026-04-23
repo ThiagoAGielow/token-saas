@@ -5,6 +5,7 @@
 import { currentUser } from '@clerk/nextjs/server'
 import type { User } from '@prisma/client'
 import { prisma } from './db'
+import { redis, TTL, userKey } from './redis'
 
 /**
  * Generates a short, unique referral code like "JOHN4X2K".
@@ -20,9 +21,20 @@ function generateReferralCode(name: string): string {
  * Creates one on first call (lazy signup) if it doesn't exist yet.
  */
 export async function getOrCreateUser(clerkId: string): Promise<User> {
-  // Fast path — user already exists
+  // L1 cache — Redis (skips the DB entirely on cache hit)
+  try {
+    const cached = await redis.get<User>(userKey(clerkId))
+    if (cached) return cached
+  } catch {
+    // Redis unavailable — fall through to DB
+  }
+
+  // Fast path — user already exists in DB
   const existing = await prisma.user.findUnique({ where: { clerkId } })
-  if (existing) return existing
+  if (existing) {
+    try { await redis.setex(userKey(clerkId), TTL.USER, JSON.stringify(existing)) } catch { /* ignore */ }
+    return existing
+  }
 
   // First time — fetch Clerk profile and create the record
   const clerkUser = await currentUser()
@@ -76,6 +88,7 @@ export async function getOrCreateUser(clerkId: string): Promise<User> {
         },
       })
 
+      try { await redis.setex(userKey(clerkId), TTL.USER, JSON.stringify(user)) } catch { /* ignore */ }
       return user
     } catch (err) {
       lastError = err
