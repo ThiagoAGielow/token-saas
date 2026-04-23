@@ -6,7 +6,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const dynamic = 'force-dynamic'
-export const revalidate = 0 // Add caching for 30 seconds
 
 import { auth }           from '@clerk/nextjs/server'
 import { NextResponse }   from 'next/server'
