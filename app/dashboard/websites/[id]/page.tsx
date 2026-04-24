@@ -146,7 +146,7 @@ export default function WebsiteChatPage({ params }: { params: Promise<{ id: stri
               setStreamingText(full);
               // Live-update the iframe preview whenever a complete HTML_UPDATE block arrives
               const match = HTML_UPDATE_RE.exec(full);
-              if (match) setPreviewHtml(match[1].trim());
+              if (match && match[1]) setPreviewHtml(match[1].trim());
             } else if (event.type === 'error') {
               throw new Error(event.message);
             }
