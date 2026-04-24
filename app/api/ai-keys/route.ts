@@ -16,7 +16,7 @@ import { getOrCreateUser } from '@/lib/user'
 import { encrypt } from '@/lib/encryption'
 import type { AIProvider } from '@/lib/ai'
 
-const VALID_PROVIDERS: readonly AIProvider[] = ['claude', 'openai', 'gemini']
+const VALID_PROVIDERS: readonly AIProvider[] = ['claude', 'openai', 'gemini', 'openrouter']
 
 function isValidProvider(x: unknown): x is AIProvider {
   return typeof x === 'string' && (VALID_PROVIDERS as readonly string[]).includes(x)

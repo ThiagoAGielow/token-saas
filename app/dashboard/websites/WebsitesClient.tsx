@@ -236,7 +236,7 @@ export default function WebsitesClient({ initialWebsites, initialBalance }: Prop
               </div>
 
               <div className="flex items-center justify-between text-xs text-gray-500 mb-3 pb-3 border-b border-white/5">
-                <span>Created {new Date(site.createdAt).toLocaleDateString()}</span>
+                <span>Created {new Date(site.createdAt).toLocaleDateString('en-AU')}</span>
                 <span>Updated {timeAgo(site.updatedAt ?? site.createdAt)}</span>
               </div>
 

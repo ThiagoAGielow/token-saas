@@ -14,13 +14,27 @@ interface ChatMessage {
   isError?: boolean;
 }
 
-type Provider = 'claude' | 'openai' | 'gemini';
+interface FileAttachment {
+  name:     string;
+  mimeType: string;
+  dataUrl:  string;
+}
+
+type Provider = 'claude' | 'openai' | 'gemini' | 'openrouter';
 type Viewport = 'desktop' | 'tablet' | 'mobile';
 
-const PROVIDERS: { value: Provider; label: string }[] = [
-  { value: 'claude', label: 'Claude' },
-  { value: 'openai', label: 'GPT-4o' },
-  { value: 'gemini', label: 'Gemini' },
+
+
+/** Free models available on OpenRouter (verified live endpoints as of 2026-04-24) */
+const OPENROUTER_MODELS: { value: string; label: string }[] = [
+  { value: 'qwen/qwen3-coder:free',                        label: 'Qwen3 Coder 480B (free)'   },
+  { value: 'meta-llama/llama-3.3-70b-instruct:free',       label: 'Llama 3.3 70B (free)'      },
+  { value: 'google/gemma-4-31b-it:free',                   label: 'Gemma 4 31B (free)'        },
+  { value: 'google/gemma-4-26b-a4b-it:free',               label: 'Gemma 4 26B MoE (free)'    },
+  { value: 'openai/gpt-oss-120b:free',                     label: 'OpenAI OSS 120B (free)'    },
+  { value: 'nvidia/nemotron-3-super-120b-a12b:free',        label: 'Nemotron Super 120B (free)' },
+  { value: 'nousresearch/hermes-3-llama-3.1-405b:free',    label: 'Hermes 3 405B (free)'      },
+  { value: 'google/gemma-3-27b-it:free',                   label: 'Gemma 3 27B (free)'        },
 ];
 
 const VIEWPORT_WIDTHS: Record<Viewport, string> = {
@@ -48,10 +62,14 @@ export default function WebsiteChatPage({ params }: { params: Promise<{ id: stri
   const [error,      setError]      = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
 
-  const [input,    setInput]    = useState('');
-  const [provider, setProvider] = useState<Provider>('claude');
-  const [sending,  setSending]  = useState(false);
+  const [input,       setInput]       = useState('');
+  const [provider]    = useState<Provider>('openrouter');
+  const [orModel,     setOrModel]     = useState(OPENROUTER_MODELS[0]!.value);
+  const [attachments, setAttachments] = useState<FileAttachment[]>([]);
+  const [sending,     setSending]     = useState(false);
   const [streamingText, setStreamingText] = useState('');
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Split-pane preview state
   const [previewHtml, setPreviewHtml] = useState<string>('');
@@ -101,6 +119,27 @@ export default function WebsiteChatPage({ params }: { params: Promise<{ id: stri
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingText]);
 
+  // ── File upload ────────────────────────────────────────────────────────────
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setAttachments(prev => [
+          ...prev,
+          { name: file.name, mimeType: file.type, dataUrl: reader.result as string },
+        ]);
+      };
+      reader.readAsDataURL(file);
+    });
+    // reset so the same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  function removeAttachment(idx: number) {
+    setAttachments(prev => prev.filter((_, i) => i !== idx));
+  }
+
   // ── Send message ───────────────────────────────────────────────────────────
   async function handleSend(e: React.FormEvent | React.KeyboardEvent) {
     e.preventDefault();
@@ -111,15 +150,22 @@ export default function WebsiteChatPage({ params }: { params: Promise<{ id: stri
     setSending(true);
     setStreamingText('');
 
+    const pendingAttachments = [...attachments];
+    setAttachments([]);
+
     // Optimistically add user message
     const userMsg: ChatMessage = { id: `tmp-${Date.now()}`, role: 'user', content: text, createdAt: new Date().toISOString() };
     setMessages(prev => [...prev, userMsg]);
 
     try {
+      const body: Record<string, unknown> = { message: text, provider };
+      if (provider === 'openrouter') body.model = orModel;
+      if (pendingAttachments.length > 0)  body.attachments = pendingAttachments;
+
       const res = await fetch(`/api/websites/${id}/chat`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ message: text, provider }),
+        body:    JSON.stringify(body),
       });
 
       if (!res.ok) {
@@ -253,10 +299,6 @@ export default function WebsiteChatPage({ params }: { params: Promise<{ id: stri
         </div>
 
         <div className="flex items-center gap-2">
-          <select value={provider} onChange={e => setProvider(e.target.value as Provider)} disabled={sending}
-            className="text-xs bg-[#1a1a1a] border border-white/10 text-gray-300 rounded-lg px-2 py-1 focus:outline-none focus:border-blue-500 disabled:opacity-50">
-            {PROVIDERS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-          </select>
           {website?.status === 'DRAFT' && (
             <button onClick={handlePublish} disabled={publishing}
               className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-xs text-green-400 font-semibold transition-colors disabled:opacity-50">
@@ -331,26 +373,73 @@ export default function WebsiteChatPage({ params }: { params: Promise<{ id: stri
 
           {/* Input */}
           <form onSubmit={handleSend} className="shrink-0 p-3 border-t border-white/10">
-            <div className="flex items-end gap-2 p-3 rounded-xl bg-[#111] border border-white/10 focus-within:border-blue-500/50 transition-colors">
+            {/* Attachment chips */}
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {attachments.map((f, i) => (
+                  <div key={i} className="flex items-center gap-1 px-2 py-1 rounded-md bg-white/5 border border-white/10 text-xs text-gray-300">
+                    <svg className="w-3 h-3 text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
+                    <span className="truncate max-w-[100px]">{f.name}</span>
+                    <button type="button" onClick={() => removeAttachment(i)} className="text-gray-600 hover:text-red-400 ml-0.5">×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Unified input box */}
+            <div className="rounded-xl bg-[#111] border border-white/10 focus-within:border-blue-500/50 transition-colors flex flex-col">
+              {/* Top row: textarea */}
               <textarea ref={el => { textareaRef.current = el; inputRef.current = el; }}
                 value={input} onChange={handleInputChange} onKeyDown={handleKeyDown}
                 placeholder="Ask me to change something…" disabled={sending} rows={1}
-                className="flex-1 bg-transparent text-white text-sm placeholder-gray-600 resize-none focus:outline-none disabled:opacity-50 max-h-40" />
-              <button type="submit" disabled={!input.trim() || sending}
-                className="w-8 h-8 rounded-lg bg-blue-500 hover:bg-blue-400 disabled:bg-white/10 disabled:text-gray-600 flex items-center justify-center transition-colors shrink-0">
-                {sending ? (
-                  <svg className="w-3.5 h-3.5 text-white animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                className="w-full bg-transparent text-white text-sm placeholder-gray-600 resize-none focus:outline-none disabled:opacity-50 max-h-40 px-3 pt-3 pb-1" />
+
+              {/* Bottom row: model selector + attach + send */}
+              <div className="flex items-center gap-1.5 px-2 pb-2 pt-1">
+                {/* Hidden file input */}
+                <input ref={fileInputRef} type="file" accept="image/*,.pdf,.txt,.md,.csv"
+                  multiple className="hidden" onChange={handleFileChange} />
+
+                {/* Model pill selector */}
+                <div className="relative flex items-center">
+                  <select value={orModel} onChange={e => setOrModel(e.target.value)} disabled={sending}
+                    className="appearance-none text-[11px] font-medium bg-white/5 hover:bg-white/10 text-gray-300 rounded-full pl-2.5 pr-5 py-1 focus:outline-none transition-colors disabled:opacity-40 cursor-pointer">
+                    {OPENROUTER_MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  </select>
+                  {/* Chevron icon */}
+                  <svg className="pointer-events-none absolute right-1.5 w-3 h-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
-                ) : (
-                  <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </div>
+
+                <div className="flex-1" />
+
+                {/* Attach button */}
+                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={sending}
+                  title="Attach file"
+                  className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-500 hover:text-gray-300 transition-colors shrink-0 disabled:opacity-40">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                   </svg>
-                )}
-              </button>
+                </button>
+
+                {/* Send button */}
+                <button type="submit" disabled={!input.trim() || sending}
+                  className="w-7 h-7 rounded-full bg-blue-500 hover:bg-blue-400 disabled:bg-white/10 disabled:text-gray-600 flex items-center justify-center transition-colors shrink-0">
+                  {sending ? (
+                    <svg className="w-3 h-3 text-white animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
-            <p className="text-[10px] text-gray-600 mt-1.5 text-center">⌘↵ to send</p>
           </form>
         </div>
 
