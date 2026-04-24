@@ -11,8 +11,9 @@
 import Anthropic               from '@anthropic-ai/sdk'
 import OpenAI                  from 'openai'
 import { GoogleGenerativeAI }  from '@google/generative-ai'
-import { prisma }              from '@/lib/db'
-import { decrypt }             from '@/lib/encryption'
+import { prisma }                   from '@/lib/db'
+import { decrypt }                  from '@/lib/encryption'
+import { provisionOpenRouterKey }   from '@/lib/user'
 
 export type AIProvider = 'claude' | 'openai' | 'gemini' | 'openrouter'
 
@@ -83,46 +84,61 @@ export async function resolveApiKey(
   provider: AIProvider,
 ): Promise<string> {
   if (userId) {
-    // For openrouter, check provisioned key first, then BYOK key
+    // OpenRouter: each user has their own provisioned sub-key in the DB.
+    // If none exists yet (e.g. user signed up before provisioning was live),
+    // provision one on-demand now before continuing.
     if (provider === 'openrouter') {
-      const provisionedKey = await prisma.openRouterProvisionedKey.findUnique({
+      let provisionedKey = await prisma.openRouterProvisionedKey.findUnique({
         where:  { userId },
         select: { encryptedKey: true, isActive: true },
       })
+
+      if (!provisionedKey?.isActive) {
+        console.log(`[resolveApiKey] no active provisioned key for user ${userId} — provisioning now`)
+        const user = await prisma.user.findUnique({
+          where:  { id: userId },
+          select: { name: true, email: true },
+        })
+        await provisionOpenRouterKey(userId, user?.name ?? user?.email ?? userId)
+
+        provisionedKey = await prisma.openRouterProvisionedKey.findUnique({
+          where:  { userId },
+          select: { encryptedKey: true, isActive: true },
+        })
+      }
+
       if (provisionedKey?.encryptedKey && provisionedKey.isActive) {
-        console.log(`[resolveApiKey] using provisioned OpenRouter key for user ${userId}`)
         return decrypt(provisionedKey.encryptedKey)
       }
-      console.warn(`[resolveApiKey] no active provisioned key for user ${userId} — falling back`)
+
+      throw new Error(
+        'Could not provision an OpenRouter key for this user. ' +
+        'Ensure OPENROUTER_PROVISIONER_KEY is set in the environment.',
+      )
     }
 
-    // Check BYOK key for any provider
+    // Non-OpenRouter: check BYOK key, then fall back to platform env key
     const record = await prisma.userAiKey.findUnique({
       where:  { userId_provider: { userId, provider } },
       select: { encryptedKey: true },
     })
-    if (record?.encryptedKey) {
-      console.log(`[resolveApiKey] using BYOK key for user ${userId} provider ${provider}`)
-      return decrypt(record.encryptedKey)
-    }
+    if (record?.encryptedKey) return decrypt(record.encryptedKey)
   }
 
-  const platformKey: Record<AIProvider, string | undefined> = {
-    claude:      process.env.ANTHROPIC_API_KEY,
-    openai:      process.env.OPENAI_API_KEY,
-    gemini:      process.env.GEMINI_API_KEY,
-    openrouter:  process.env.OPENROUTER_API_KEY,
+  const platformKey: Record<Exclude<AIProvider, 'openrouter'>, string | undefined> = {
+    claude: process.env.ANTHROPIC_API_KEY,
+    openai: process.env.OPENAI_API_KEY,
+    gemini: process.env.GEMINI_API_KEY,
   }
-  const key = platformKey[provider]
+  const key = platformKey[provider as Exclude<AIProvider, 'openrouter'>]
 
   if (!key) {
     throw new Error(
       `No API key available for provider "${provider}". ` +
-      `Set one in your settings or configure the platform key in env.`,
+      `Set one in your account settings.`,
     )
   }
 
-  console.log(`[resolveApiKey] using platform env key for provider ${provider}`)
   return key
 }
 
@@ -387,14 +403,38 @@ async function callOpenRouter({ apiKey, model, system, messages, maxTokens }: Op
 
 async function* streamOpenRouter({ apiKey, model, system, messages, maxTokens }: OpenRouterCallOptions): AsyncGenerator<string, void, unknown> {
   const client = buildOpenRouterClient(apiKey)
-  const stream = await client.chat.completions.create({
-    model,
-    max_tokens: maxTokens,
-    messages:   buildOpenRouterMessages(system, messages),
-    stream:     true,
-  })
-  for await (const chunk of stream) {
-    const text = chunk.choices[0]?.delta?.content
-    if (text) yield text
+
+  const MAX_RETRIES = 3
+  const BASE_DELAY  = 2000 // ms
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const stream = await client.chat.completions.create({
+        model,
+        max_tokens: maxTokens,
+        messages:   buildOpenRouterMessages(system, messages),
+        stream:     true,
+      })
+      for await (const chunk of stream) {
+        const text = chunk.choices[0]?.delta?.content
+        if (text) yield text
+      }
+      return // success
+    } catch (err) {
+      const status = (err as { status?: number }).status
+      if (status === 429 && attempt < MAX_RETRIES - 1) {
+        const delay = BASE_DELAY * 2 ** attempt
+        console.warn(`[streamOpenRouter] 429 rate limit on attempt ${attempt + 1} — retrying in ${delay}ms`)
+        await new Promise(r => setTimeout(r, delay))
+        continue
+      }
+      // 429 exhausted or other error — throw user-friendly message
+      if (status === 429) {
+        throw new Error(
+          `The "${model}" model is currently rate-limited. Please try again in a moment or select a different model.`
+        )
+      }
+      throw err
+    }
   }
 }
