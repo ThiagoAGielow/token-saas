@@ -24,7 +24,7 @@ function generateReferralCode(name: string): string {
  * Fire-and-forget — a failure here must never block the signup flow.
  * Requires OPENROUTER_PROVISIONER_KEY env var (a Management API key).
  */
-async function provisionOpenRouterKey(userId: string, userName: string): Promise<void> {
+export async function provisionOpenRouterKey(userId: string, userName: string): Promise<void> {
   const provisionerKey = process.env.OPENROUTER_PROVISIONER_KEY
   if (!provisionerKey) {
     console.warn('[provisionOpenRouterKey] OPENROUTER_PROVISIONER_KEY not set — skipping auto-provision')
