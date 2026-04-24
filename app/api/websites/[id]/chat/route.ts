@@ -66,7 +66,7 @@ export async function GET(_request: Request, { params }: RouteContext): Promise<
 
     const website = await prisma.website.findFirst({
       where:  { id, userId: user.id },
-      select: { id: true, name: true, subdomain: true, status: true, vercelUrl: true },
+      select: { id: true, name: true, subdomain: true, status: true, vercelUrl: true, generatedHtml: true },
     })
     if (!website) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
