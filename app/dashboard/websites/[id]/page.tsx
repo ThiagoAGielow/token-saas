@@ -26,15 +26,15 @@ type Viewport = 'desktop' | 'tablet' | 'mobile';
 
 
 /** Free models available on OpenRouter (verified live endpoints as of 2026-04-24) */
-const OPENROUTER_MODELS: { value: string; label: string }[] = [
-  { value: 'qwen/qwen3-coder:free',                        label: 'Qwen3 Coder 480B (free)'   },
-  { value: 'meta-llama/llama-3.3-70b-instruct:free',       label: 'Llama 3.3 70B (free)'      },
-  { value: 'google/gemma-4-31b-it:free',                   label: 'Gemma 4 31B (free)'        },
-  { value: 'google/gemma-4-26b-a4b-it:free',               label: 'Gemma 4 26B MoE (free)'    },
-  { value: 'openai/gpt-oss-120b:free',                     label: 'OpenAI OSS 120B (free)'    },
-  { value: 'nvidia/nemotron-3-super-120b-a12b:free',        label: 'Nemotron Super 120B (free)' },
-  { value: 'nousresearch/hermes-3-llama-3.1-405b:free',    label: 'Hermes 3 405B (free)'      },
-  { value: 'google/gemma-3-27b-it:free',                   label: 'Gemma 3 27B (free)'        },
+const OPENROUTER_MODELS: { value: string; label: string; vision: boolean }[] = [
+  { value: 'qwen/qwen3-coder:free',                        label: 'Qwen3 Coder 480B (free)',    vision: false },
+  { value: 'meta-llama/llama-3.3-70b-instruct:free',       label: 'Llama 3.3 70B (free)',       vision: false },
+  { value: 'google/gemma-4-31b-it:free',                   label: 'Gemma 4 31B (free)',         vision: true  },
+  { value: 'google/gemma-4-26b-a4b-it:free',               label: 'Gemma 4 26B MoE (free)',     vision: true  },
+  { value: 'openai/gpt-oss-120b:free',                     label: 'OpenAI OSS 120B (free)',     vision: false },
+  { value: 'nvidia/nemotron-3-super-120b-a12b:free',        label: 'Nemotron Super 120B (free)', vision: false },
+  { value: 'nousresearch/hermes-3-llama-3.1-405b:free',    label: 'Hermes 3 405B (free)',       vision: false },
+  { value: 'google/gemma-3-27b-it:free',                   label: 'Gemma 3 27B (free)',         vision: true  },
 ];
 
 const VIEWPORT_WIDTHS: Record<Viewport, string> = {
@@ -65,6 +65,7 @@ export default function WebsiteChatPage({ params }: { params: Promise<{ id: stri
   const [input,       setInput]       = useState('');
   const [provider]    = useState<Provider>('openrouter');
   const [orModel,     setOrModel]     = useState(OPENROUTER_MODELS[0]!.value);
+  const supportsVision = OPENROUTER_MODELS.find(m => m.value === orModel)?.vision ?? false;
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [sending,     setSending]     = useState(false);
   const [streamingText, setStreamingText] = useState('');
@@ -403,7 +404,12 @@ export default function WebsiteChatPage({ params }: { params: Promise<{ id: stri
 
                 {/* Model pill selector */}
                 <div className="relative flex items-center">
-                  <select value={orModel} onChange={e => setOrModel(e.target.value)} disabled={sending}
+                  <select value={orModel} onChange={e => {
+                    const next = e.target.value;
+                    setOrModel(next);
+                    const nextSupportsVision = OPENROUTER_MODELS.find(m => m.value === next)?.vision ?? false;
+                    if (!nextSupportsVision) setAttachments([]);
+                  }} disabled={sending}
                     className="appearance-none text-[11px] font-medium bg-white/5 hover:bg-white/10 text-gray-300 rounded-full pl-2.5 pr-5 py-1 focus:outline-none transition-colors disabled:opacity-40 cursor-pointer">
                     {OPENROUTER_MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                   </select>
@@ -415,10 +421,11 @@ export default function WebsiteChatPage({ params }: { params: Promise<{ id: stri
 
                 <div className="flex-1" />
 
-                {/* Attach button */}
-                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={sending}
-                  title="Attach file"
-                  className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-500 hover:text-gray-300 transition-colors shrink-0 disabled:opacity-40">
+                {/* Attach button — only enabled for vision-capable models */}
+                <button type="button" onClick={() => fileInputRef.current?.click()}
+                  disabled={sending || !supportsVision}
+                  title={supportsVision ? 'Attach image' : 'Switch to Gemma 4 or Gemma 3 to attach images'}
+                  className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-500 hover:text-gray-300 transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed">
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                   </svg>
