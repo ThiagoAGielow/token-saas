@@ -75,16 +75,17 @@ model User {
   agencyOf       AgencyClient[] @relation("AgencyClient")
 
   // Relations
-  wallet            TokenWallet?
-  apiKeys           ApiKey[]
-  aiKeys            UserAiKey[]
-  websites          Website[]
-  domains           Domain[]
-  emailAccounts     EmailAccount[]
-  transactions      TokenTransaction[]
-  grants            TokenGrant[]
-  subscription      Subscription?
-  agencyInvites     AgencyInvite[]
+  wallet                  TokenWallet?
+  apiKeys                 ApiKey[]
+  aiKeys                  UserAiKey[]
+  openRouterProvisionedKey OpenRouterProvisionedKey?
+  websites                Website[]
+  domains                 Domain[]
+  emailAccounts           EmailAccount[]
+  transactions            TokenTransaction[]
+  grants                  TokenGrant[]
+  subscription            Subscription?
+  agencyInvites           AgencyInvite[]
 
   @@index([clerkId])
   @@index([referralCode])
@@ -325,7 +326,7 @@ model UserAiKey {
   userId       String
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  /// 'claude' | 'openai' | 'gemini'
+  /// 'claude' | 'openai' | 'gemini' | 'openrouter'
   provider     String
 
   /// AES-256-GCM encrypted API key
@@ -339,6 +340,46 @@ model UserAiKey {
 
   @@unique([userId, provider])
   @@index([userId])
+}
+
+// ─── OpenRouter Provisioned Key ───────────────────────────────────────────────
+
+/// Platform-provisioned OpenRouter sub-key for a user.
+/// Created via OpenRouter API — one per user.
+/// The raw key is AES-256-GCM encrypted; keyHash is OpenRouter's identifier.
+model OpenRouterProvisionedKey {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// OpenRouter's key hash — used to manage (update / delete) the key via their API
+  keyHash      String   @unique
+
+  /// AES-256-GCM encrypted actual API key (sk-or-v1-...)
+  encryptedKey String
+
+  /// Last 4 characters of the raw key — shown to the user for identification
+  keyHint      String
+
+  /// Human-readable name (also sent to OpenRouter)
+  name         String   @default("VelocitySites Key")
+
+  /// Credit limit in USD (null = unlimited)
+  limitUsd     Float?
+
+  /// Remaining credits as last synced from OpenRouter (approximate)
+  usedUsd      Float    @default(0)
+
+  isActive     Boolean  @default(true)
+
+  /// Last time usage was synced from OpenRouter
+  lastSyncAt   DateTime?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+  @@index([keyHash])
 }
 
 // ─── Agency ───────────────────────────────────────────────────────────────────
