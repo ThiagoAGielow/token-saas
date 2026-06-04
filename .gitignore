@@ -1,3 +1,6 @@
+# Local scripts (scratch/test files)
+scripts/
+
 # dependencies
 node_modules/
 .pnp

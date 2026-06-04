@@ -20,9 +20,20 @@ interface RouteContext {
   params: Promise<{ id: string }>
 }
 
+/** A file attachment sent by the client (base64-encoded data URL). */
+interface FileAttachment {
+  name:     string
+  mimeType: string
+  dataUrl:  string  // "data:<mime>;base64,<data>"
+}
+
 interface ChatBody {
-  message?: string
-  provider?: AIProvider
+  message?:     string
+  provider?:    AIProvider
+  /** Optional model override (e.g. "anthropic/claude-3.5-sonnet" for openrouter) */
+  model?:       string
+  /** Optional file attachments for vision-capable models */
+  attachments?: FileAttachment[]
 }
 
 interface WebsiteForChat {
@@ -67,7 +78,7 @@ export async function GET(_request: Request, { params }: RouteContext): Promise<
 
     const website = await prisma.website.findFirst({
       where:  { id, userId: user.id },
-      select: { id: true, name: true, subdomain: true, status: true, vercelUrl: true },
+      select: { id: true, name: true, subdomain: true, status: true, vercelUrl: true, generatedHtml: true },
     })
     if (!website) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -92,7 +103,7 @@ export async function POST(request: Request, { params }: RouteContext): Promise<
 
   const { id } = await params
   const body = (await request.json()) as ChatBody
-  const { message, provider = 'claude' } = body
+  const { message, provider = 'openrouter', model, attachments = [] } = body
 
   if (!message?.trim()) return NextResponse.json({ error: 'Message is required' }, { status: 400 })
 
@@ -125,9 +136,20 @@ export async function POST(request: Request, { params }: RouteContext): Promise<
     select:  { role: true, content: true },
   })
 
+  // Build the user content — plain text, or rich content parts when files are attached
+  const userContent: AIMessage['content'] = attachments.length > 0
+    ? [
+        { type: 'text', text: message.trim() },
+        ...attachments.map(f => ({
+          type:      'image_url' as const,
+          image_url: { url: f.dataUrl, detail: 'auto' as const },
+        })),
+      ]
+    : message.trim()
+
   const aiMessages: AIMessage[] = [
     ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-    { role: 'user', content: message.trim() },
+    { role: 'user', content: userContent },
   ]
 
   const enc = new TextEncoder()
@@ -140,6 +162,7 @@ export async function POST(request: Request, { params }: RouteContext): Promise<
         for await (const chunk of callAIStream({
           userId:    user.id,
           provider,
+          ...(model ? { model } : {}),
           system:    buildSystemPrompt(website),
           messages:  aiMessages,
           maxTokens: 8192,

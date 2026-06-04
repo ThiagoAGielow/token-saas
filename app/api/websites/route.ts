@@ -14,7 +14,7 @@ import { prisma }         from '@/lib/db'
 import { getOrCreateUser } from '@/lib/user'
 import { spendTokens, getBalance, TOKEN_COSTS } from '@/lib/tokens'
 import { callAI, type AIProvider } from '@/lib/ai'
-import { provisionSiteRepo }   from '@/lib/github'
+import { provisionClientRepo } from '@/lib/github'
 import { createVercelProject } from '@/lib/vercel'
 
 const SUBDOMAIN_RE = /^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/
@@ -177,57 +177,44 @@ export async function POST(request: Request): Promise<NextResponse> {
       )
     }
 
-    let githubRepo: string | null    = null
+    let githubRepo: string | null = null
     let githubRepoUrl: string | null = null
+
     try {
-      const gh = await provisionSiteRepo({
-        name:          name.trim(),
-        subdomain:     cleanSubdomain,
+      const { repoName, repoUrl } = await provisionClientRepo({
+        clientName: name.trim(),
+        subdomain: cleanSubdomain,
+        tier: 'static',
         generatedHtml,
       })
-      githubRepo    = gh.repoName
-      githubRepoUrl = gh.repoUrl
-    } catch (ghError) {
-      console.error('[POST /api/websites] GitHub provisioning failed:', ghError)
-    }
-
-    let vercelProjectId: string | null = null
-    let vercelUrl: string | null       = null
-    if (githubRepo) {
-      try {
-        const vp = await createVercelProject({
-          repoName: githubRepo,
-          siteName: name.trim(),
-        })
-        vercelProjectId = vp.projectId
-        vercelUrl       = vp.vercelUrl
-      } catch (vcError) {
-        console.error('[POST /api/websites] Vercel project creation failed:', vcError)
-      }
+      
+      githubRepo = repoName
+      githubRepoUrl = repoUrl
+    } catch (ghErr) {
+      console.error('[POST /api/websites] GitHub provisioning failed:', ghErr)
+      // Continue without GitHub - can retry later
     }
 
     const updated = await prisma.website.update({
       where: { id: website.id },
-      data:  {
+      data: {
         generatedHtml,
-        status:       WebsiteStatus.DRAFT,
-        publishedAt:  null,
-        ...(githubRepo      ? { githubRepo }      : {}),
-        ...(githubRepoUrl   ? { githubRepoUrl }   : {}),
-        ...(vercelProjectId ? { vercelProjectId } : {}),
-        ...(vercelUrl       ? { vercelUrl }       : {}),
+        githubRepo,
+        githubRepoUrl,
+        status: WebsiteStatus.ACTIVE,
+        publishedAt: new Date(),
       },
       select: {
-        id:          true,
-        name:        true,
-        subdomain:   true,
-        status:      true,
-        tokenCost:   true,
-        prompt:      true,
+        id: true,
+        name: true,
+        subdomain: true,
+        status: true,
+        githubRepo: true,
+        githubRepoUrl: true,
+        vercelProjectId: true,
+        vercelUrl: true,
         publishedAt: true,
-        createdAt:   true,
-        updatedAt:   true,
-        domain:      { select: { domain: true, verified: true } },
+        createdAt: true,
       },
     })
 

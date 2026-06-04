@@ -15,18 +15,29 @@ import {
   Legend,
 } from 'recharts';
 
+// Seeded PRNG (LCG) — produces the same sequence on server and client,
+// preventing React hydration mismatches caused by Math.random().
+function makeRng(seed: number) {
+  let s = seed >>> 0;
+  return () => {
+    s = Math.imul(1664525, s) + 1013904223 >>> 0;
+    return s / 0x100000000;
+  };
+}
+
 // TODO: replace with real data from API — last 30 days of token usage
 const generateDailyData = () => {
+  const rng  = makeRng(42); // fixed seed → deterministic on every render
   const data = [];
-  const now = new Date('2026-03-31');
+  const now  = new Date('2026-03-31');
   for (let i = 29; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
-    const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    const websites = Math.random() > 0.85 ? 50 : 0;
-    const domains = Math.random() > 0.92 ? 20 : 0;
-    const emails = Math.random() > 0.88 ? 10 : 0;
-    const ai = Math.floor(Math.random() * 45);
+    const label    = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const websites = rng() > 0.85 ? 50 : 0;
+    const domains  = rng() > 0.92 ? 20 : 0;
+    const emails   = rng() > 0.88 ? 10 : 0;
+    const ai       = Math.floor(rng() * 45);
     data.push({ date: label, websites, domains, emails, ai, total: websites + domains + emails + ai });
   }
   return data;

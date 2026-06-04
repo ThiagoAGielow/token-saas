@@ -1,19 +1,12 @@
-'use client';
+'use client'
 
-import { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
-import type { Website } from '@/types/dashboard';
+import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
+import type { Website } from '@/types/dashboard'
 
-const PLATFORM_DOMAIN = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || 'velocitysites.com.au';
+type WebsiteStatus = 'ACTIVE' | 'DRAFT' | 'BUILDING' | 'PAUSED'
 
-type WebsiteStatus = 'ACTIVE' | 'DRAFT' | 'BUILDING' | 'PAUSED';
-
-const STATUS_STYLES: Record<WebsiteStatus, string> = {
-  ACTIVE:   'bg-green-500/15 text-green-400 border-green-500/25',
-  DRAFT:    'bg-blue-500/15 text-blue-400 border-blue-500/25',
-  BUILDING: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/25',
-  PAUSED:   'bg-red-500/15 text-red-400 border-red-500/25',
-};
+const PLATFORM_DOMAIN = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || 'velocitysites.com.au'
 
 const STATUS_DOT: Record<WebsiteStatus, string> = {
   ACTIVE:   'bg-green-400',
@@ -22,7 +15,13 @@ const STATUS_DOT: Record<WebsiteStatus, string> = {
   PAUSED:   'bg-red-400',
 };
 
-const STATUS_LABEL: Record<WebsiteStatus, string> = { ACTIVE: 'Live', DRAFT: 'Draft', BUILDING: 'Building', PAUSED: 'Paused' };
+const STATUS_LABEL:  Record<WebsiteStatus, string> = { ACTIVE: 'Live', DRAFT: 'Draft', BUILDING: 'Building', PAUSED: 'Paused' };
+const STATUS_STYLES: Record<WebsiteStatus, string> = {
+  ACTIVE:   'bg-green-500/15 text-green-400 border-green-500/25',
+  DRAFT:    'bg-blue-500/15 text-blue-400 border-blue-500/25',
+  BUILDING: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/25',
+  PAUSED:   'bg-red-500/15 text-red-400 border-red-500/25',
+};
 
 const PROVIDERS = [
   { value: 'claude', label: 'Claude (Anthropic)' },

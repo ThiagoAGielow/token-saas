@@ -5,6 +5,8 @@
 import { currentUser } from '@clerk/nextjs/server'
 import type { User } from '@prisma/client'
 import { prisma } from './db'
+import { redis, TTL, userKey } from './redis'
+import { encrypt } from './encryption'
 
 /**
  * Generates a short, unique referral code like "JOHN4X2K".
@@ -16,13 +18,86 @@ function generateReferralCode(name: string): string {
 }
 
 /**
+ * Calls the OpenRouter Management API to create a provisioned sub-key for a
+ * newly-created user, then stores it (AES-256-GCM encrypted) in the DB.
+ *
+ * Fire-and-forget — a failure here must never block the signup flow.
+ * Requires OPENROUTER_PROVISIONER_KEY env var (a Management API key).
+ */
+export async function provisionOpenRouterKey(userId: string, userName: string): Promise<void> {
+  const provisionerKey = process.env.OPENROUTER_PROVISIONER_KEY
+  if (!provisionerKey) {
+    console.warn('[provisionOpenRouterKey] OPENROUTER_PROVISIONER_KEY not set — skipping auto-provision')
+    return
+  }
+
+  // Skip if the user already has a key (idempotent guard)
+  const existing = await prisma.openRouterProvisionedKey.findUnique({ where: { userId } })
+  if (existing) return
+
+  const keyName = `VelocitySites — ${userName} (${userId.slice(0, 8)})`
+
+  let rawKey: string
+  let keyHash: string
+
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/keys', {
+      method:  'POST',
+      headers: {
+        Authorization:  `Bearer ${provisionerKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name: keyName }),
+    })
+
+    if (!res.ok) {
+      const text = await res.text()
+      console.error('[provisionOpenRouterKey] OpenRouter API error:', res.status, text)
+      return
+    }
+
+    const json = (await res.json()) as { key?: string; data?: { hash?: string } }
+    if (!json.key || !json.data?.hash) {
+      console.error('[provisionOpenRouterKey] Unexpected response shape:', json)
+      return
+    }
+
+    rawKey  = json.key
+    keyHash = json.data.hash
+  } catch (err) {
+    console.error('[provisionOpenRouterKey] Network error:', err)
+    return
+  }
+
+  const encryptedKey = encrypt(rawKey)
+  const keyHint      = rawKey.slice(-4)
+
+  await prisma.openRouterProvisionedKey.upsert({
+    where:  { userId },
+    update: { encryptedKey, keyHint, keyHash, name: keyName, isActive: true },
+    create: { userId, encryptedKey, keyHint, keyHash, name: keyName },
+  })
+}
+
+/**
  * Returns the internal User record for the currently authenticated Clerk user.
  * Creates one on first call (lazy signup) if it doesn't exist yet.
  */
 export async function getOrCreateUser(clerkId: string): Promise<User> {
-  // Fast path — user already exists
+  // L1 cache — Redis (skips the DB entirely on cache hit)
+  try {
+    const cached = await redis.get<User>(userKey(clerkId))
+    if (cached) return cached
+  } catch {
+    // Redis unavailable — fall through to DB
+  }
+
+  // Fast path — user already exists in DB
   const existing = await prisma.user.findUnique({ where: { clerkId } })
-  if (existing) return existing
+  if (existing) {
+    try { await redis.setex(userKey(clerkId), TTL.USER, JSON.stringify(existing)) } catch { /* ignore */ }
+    return existing
+  }
 
   // First time — fetch Clerk profile and create the record
   const clerkUser = await currentUser()
@@ -75,6 +150,13 @@ export async function getOrCreateUser(clerkId: string): Promise<User> {
           description:  'Welcome bonus — 100 free tokens',
         },
       })
+
+      try { await redis.setex(userKey(clerkId), TTL.USER, JSON.stringify(user)) } catch { /* ignore */ }
+
+      // Auto-provision an OpenRouter key for this new user (fire-and-forget)
+      provisionOpenRouterKey(user.id, name).catch(err =>
+        console.error('[getOrCreateUser] provisionOpenRouterKey failed silently:', err)
+      )
 
       return user
     } catch (err) {
