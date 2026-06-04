@@ -30,11 +30,22 @@ const PROVIDERS = [
   { value: 'gemini', label: 'Gemini (Google)' },
 ];
 
+const TEMPLATES = [
+  { id: '',             label: 'Blank',        tag: 'From scratch',  gradient: 'from-gray-800 to-gray-900' },
+  { id: 'trades',       label: 'Trades',       tag: 'Construction',  gradient: 'from-orange-950 to-slate-900' },
+  { id: 'restaurant',   label: 'Restaurant',   tag: 'Food & Dining', gradient: 'from-amber-950 to-red-950' },
+  { id: 'wellness',     label: 'Wellness',     tag: 'Health & Life', gradient: 'from-emerald-950 to-teal-900' },
+  { id: 'professional', label: 'Professional', tag: 'Corporate',     gradient: 'from-blue-950 to-indigo-950' },
+  { id: 'portfolio',    label: 'Portfolio',    tag: 'Creative',      gradient: 'from-purple-950 to-pink-950' },
+  { id: 'startup',      label: 'Startup',      tag: 'SaaS / Tech',   gradient: 'from-cyan-950 to-blue-950' },
+];
+
 interface CreateForm {
   name: string;
   subdomain: string;
   prompt: string;
   provider: string;
+  templateId: string;
 }
 
 function timeAgo(dateStr: string) {
@@ -55,14 +66,17 @@ export default function WebsitesPage() {
   const [showModal, setShowModal]   = useState(false);
   const [creating, setCreating]       = useState(false);
   const [publishing, setPublishing]   = useState<string | null>(null);
+  const [deleting, setDeleting]       = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [error, setError]             = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
   const [form, setForm] = useState<CreateForm>({
-    name:      '',
-    subdomain: '',
-    prompt:    '',
-    provider:  'claude',
+    name:       '',
+    subdomain:  '',
+    prompt:     '',
+    provider:   'claude',
+    templateId: '',
   });
 
   const loadData = useCallback(async () => {
@@ -96,6 +110,20 @@ export default function WebsitesPage() {
     }
   }
 
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/websites/${deleteTarget.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setDeleteTarget(null);
+        await loadData();
+      }
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   useEffect(() => { loadData(); }, [loadData]);
 
   function handleNameChange(value: string) {
@@ -122,7 +150,7 @@ export default function WebsitesPage() {
       }
 
       setShowModal(false);
-      setForm({ name: '', subdomain: '', prompt: '', provider: 'claude' });
+      setForm({ name: '', subdomain: '', prompt: '', provider: 'claude', templateId: '' });
       await loadData();
     } catch {
       setCreateError('Something went wrong. Please try again.');
@@ -230,22 +258,53 @@ export default function WebsitesPage() {
         {websites.map((site) => (
           <div
             key={site.id}
-            className="rounded-xl bg-[#111] border border-white/10 hover:border-white/20 transition-all duration-200 overflow-hidden"
+            className="group rounded-xl bg-[#111] border border-white/10 hover:border-white/20 transition-all duration-200 overflow-hidden"
           >
             {/* Thumbnail */}
-            <div className="h-36 bg-gradient-to-br from-[#1a1a1a] to-[#111] border-b border-white/10 flex items-center justify-center relative overflow-hidden">
-              <div className="absolute inset-0 opacity-10" style={{
-                backgroundImage: 'radial-gradient(circle at 20% 50%, #0ea5e9 0%, transparent 50%), radial-gradient(circle at 80% 20%, #8b5cf6 0%, transparent 50%)',
-              }} />
-              <svg className="w-10 h-10 text-white/10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" />
-              </svg>
-              <div className="absolute top-3 right-3">
+            <div className="h-36 border-b border-white/10 relative overflow-hidden bg-[#111]">
+              {site.status !== 'BUILDING' ? (
+                <iframe
+                  src={`/api/websites/${site.id}/html`}
+                  loading="lazy"
+                  scrolling="no"
+                  title={site.name}
+                  style={{
+                    width: '1024px',
+                    height: '768px',
+                    transform: 'scale(0.29)',
+                    transformOrigin: 'top left',
+                    pointerEvents: 'none',
+                    border: 'none',
+                    display: 'block',
+                  }}
+                />
+              ) : (
+                <>
+                  <div className="absolute inset-0 opacity-10" style={{
+                    backgroundImage: 'radial-gradient(circle at 20% 50%, #0ea5e9 0%, transparent 50%), radial-gradient(circle at 80% 20%, #8b5cf6 0%, transparent 50%)',
+                  }} />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <svg className="w-10 h-10 text-white/10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" />
+                    </svg>
+                  </div>
+                </>
+              )}
+              <div className="absolute top-3 right-3 z-10">
                 <span className={`flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded-full border ${STATUS_STYLES[site.status]}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[site.status]}`} />
                   {STATUS_LABEL[site.status]}
                 </span>
               </div>
+              <button
+                onClick={() => setDeleteTarget({ id: site.id, name: site.name })}
+                className="absolute top-3 left-3 z-10 w-7 h-7 rounded-lg bg-black/50 hover:bg-red-500/80 flex items-center justify-center text-white/40 hover:text-white transition-all opacity-0 group-hover:opacity-100"
+                title="Delete website"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
             </div>
 
             <div className="p-4">
@@ -376,6 +435,15 @@ export default function WebsitesPage() {
                 onClose: () => { setShowModal(false); setCreateError(null); } }}
         />
       )}
+
+      {deleteTarget && (
+        <DeleteConfirmModal
+          siteName={deleteTarget.name}
+          deleting={deleting}
+          onConfirm={handleDelete}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }
@@ -394,6 +462,15 @@ interface CreateModalProps {
   canAfford: boolean;
   onClose: () => void;
 }
+
+const TEMPLATE_PREVIEW_URLS: Record<string, string> = {
+  trades:       'https://webmint-trades.vercel.app',
+  restaurant:   'https://webmint-restaurant.vercel.app',
+  wellness:     'https://webmint-wellness.vercel.app',
+  professional: 'https://webmint-professional.vercel.app',
+  portfolio:    'https://webmint-portfolio.vercel.app',
+  startup:      'https://webmint-startup.vercel.app',
+};
 
 function CreateModal({ form, setForm, handleNameChange, handleCreate, creating, createError, balance, cost, canAfford, onClose }: CreateModalProps) {
   return (
@@ -416,6 +493,51 @@ function CreateModal({ form, setForm, handleNameChange, handleCreate, creating, 
         </div>
 
         <form onSubmit={handleCreate} className="space-y-4">
+          {/* Template picker */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs text-gray-400 font-medium uppercase tracking-wider">
+                Choose a Template
+              </label>
+              {form.templateId && (
+                <a
+                  href={TEMPLATE_PREVIEW_URLS[form.templateId]}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-400 hover:text-blue-300 underline"
+                >
+                  Preview template ↗
+                </a>
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {TEMPLATES.map(t => (
+                <button
+                  key={t.id}
+                  type="button"
+                  disabled={creating}
+                  onClick={() => setForm(f => ({ ...f, templateId: t.id }))}
+                  className={`relative rounded-lg overflow-hidden h-16 flex flex-col items-center justify-center gap-0.5 border transition-all text-center px-1
+                    ${form.templateId === t.id
+                      ? 'border-blue-500 ring-1 ring-blue-500'
+                      : 'border-white/10 hover:border-white/25'
+                    }`}
+                >
+                  <div className={`absolute inset-0 bg-gradient-to-br ${t.gradient} opacity-80`} />
+                  <span className="relative text-xs font-semibold text-white leading-tight">{t.label}</span>
+                  <span className="relative text-[10px] text-white/50 leading-tight">{t.tag}</span>
+                  {form.templateId === t.id && (
+                    <span className="absolute top-1 right-1 w-3 h-3 rounded-full bg-blue-500 flex items-center justify-center">
+                      <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 12 12">
+                        <path d="M10 3L5 8.5 2 5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                      </svg>
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Name */}
           <div>
             <label className="block text-xs text-gray-400 mb-1.5 font-medium uppercase tracking-wider">
@@ -553,6 +675,69 @@ function CreateModal({ form, setForm, handleNameChange, handleCreate, creating, 
             AI is building your site — this takes 15–30 seconds
           </p>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Delete Confirm Modal ─────────────────────────────────────────────────────
+
+interface DeleteConfirmModalProps {
+  siteName: string;
+  deleting: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}
+
+function DeleteConfirmModal({ siteName, deleting, onConfirm, onClose }: DeleteConfirmModalProps) {
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="w-full max-w-sm rounded-2xl bg-[#111] border border-white/10 p-6 shadow-2xl">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+            <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-white">Delete this website?</h3>
+            <p className="text-xs text-gray-500 mt-0.5">This cannot be undone</p>
+          </div>
+        </div>
+
+        <div className="p-3 rounded-lg bg-red-500/5 border border-red-500/15 mb-4">
+          <p className="text-sm text-white font-semibold mb-1 truncate">{siteName}</p>
+          <p className="text-xs text-gray-400 leading-relaxed">
+            The website record will be permanently deleted from your dashboard and the subdomain will go offline. Your GitHub repo and Vercel project will remain but will no longer be managed here.
+          </p>
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            disabled={deleting}
+            className="flex-1 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 font-medium text-sm transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={deleting}
+            className="flex-1 py-2.5 rounded-lg bg-red-500 hover:bg-red-400 text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {deleting ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                </svg>
+                Deleting…
+              </>
+            ) : (
+              'Delete Website'
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

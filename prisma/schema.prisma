@@ -67,6 +67,9 @@ model User {
   referrer     User?    @relation("Referrals", fields: [referredBy], references: [id])
   referrals    User[]   @relation("Referrals")
 
+  /// GitHub username for repo collaborator invites (e.g. "johndoe")
+  githubUsername String?
+
   /// Agency role — USER (default) or AGENCY
   role         UserRole @default(USER)
 

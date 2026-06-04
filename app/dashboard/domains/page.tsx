@@ -99,6 +99,7 @@ export default function DomainsPage() {
   const [cdLoading, setCdLoading]             = useState(true);
   const [showCdForm, setShowCdForm]           = useState(false);
   const [cdInput, setCdInput]                 = useState('');
+  const [cdWebsiteId, setCdWebsiteId]         = useState('');
   const [cdAdding, setCdAdding]               = useState(false);
   const [cdError, setCdError]                 = useState<string | null>(null);
   const [verifying, setVerifying]             = useState<string | null>(null);
@@ -121,7 +122,7 @@ export default function DomainsPage() {
       const res = await fetch('/api/domains', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ domain: cdInput }),
+        body:    JSON.stringify({ domain: cdInput, websiteId: cdWebsiteId || undefined }),
       });
       const data = (await res.json()) as { domain?: CustomDomain; error?: string };
       if (!res.ok || !data.domain) throw new Error(data.error || 'Failed to add domain');
@@ -417,10 +418,34 @@ export default function DomainsPage() {
               />
               <p className="text-xs text-gray-500 mt-1.5">Enter your root domain without www (e.g. myshop.com)</p>
             </div>
+
+            {/* Website selector */}
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5 font-medium uppercase tracking-wider">
+                Link to Website <span className="text-gray-600 normal-case">(optional — required for Vercel auto-connect)</span>
+              </label>
+              <select
+                value={cdWebsiteId}
+                onChange={(e) => setCdWebsiteId(e.target.value)}
+                disabled={cdAdding}
+                className="w-full px-3 py-2.5 rounded-lg bg-[#1a1a1a] border border-white/10 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors disabled:opacity-50"
+              >
+                <option value="">— Select a website (optional) —</option>
+                {sites.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name} ({s.subdomain}.{PLATFORM_DOMAIN})</option>
+                ))}
+              </select>
+              {cdWebsiteId && (
+                <p className="text-xs text-green-400 mt-1.5">
+                  ✓ Domain will be auto-added to this site&apos;s Vercel project on verification.
+                </p>
+              )}
+            </div>
+
             {cdError && <p className="text-sm text-red-400">{cdError}</p>}
             <div className="flex gap-2">
               <button
-                onClick={() => { setShowCdForm(false); setCdInput(''); setCdError(null); }}
+                onClick={() => { setShowCdForm(false); setCdInput(''); setCdWebsiteId(''); setCdError(null); }}
                 className="flex-1 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 text-sm font-medium transition-colors"
               >Cancel</button>
               <button
@@ -512,16 +537,24 @@ export default function DomainsPage() {
                       </div>
                     )}
 
-                    {/* Verified — show live domain */}
+                    {/* Verified — show live domain + linked site */}
                     {d.verified && (
-                      <a
-                        href={`https://www.${d.domain}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-green-400 hover:text-green-300 font-mono transition-colors"
-                      >
-                        www.{d.domain} ↗
-                      </a>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <a
+                          href={`https://www.${d.domain}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-green-400 hover:text-green-300 font-mono transition-colors"
+                        >
+                          www.{d.domain} ↗
+                        </a>
+                        {d.websiteId && (() => {
+                          const linked = sites.find((s) => s.id === d.websiteId);
+                          return linked ? (
+                            <span className="text-xs text-gray-500">→ {linked.name}</span>
+                          ) : null;
+                        })()}
+                      </div>
                     )}
                   </div>
 

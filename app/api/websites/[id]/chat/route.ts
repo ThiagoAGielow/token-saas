@@ -10,6 +10,7 @@ import { prisma }          from '@/lib/db'
 import { getOrCreateUser } from '@/lib/user'
 import { callAIStream, type AIMessage, type AIProvider } from '@/lib/ai'
 import { updateSiteHtml }  from '@/lib/github'
+import { getBalance, spendTokens, TOKEN_COSTS } from '@/lib/tokens'
 
 const MAX_HISTORY = 20
 
@@ -105,6 +106,17 @@ export async function POST(request: Request, { params }: RouteContext): Promise<
     },
   })
   if (!website) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const cost    = TOKEN_COSTS.AI_REWRITE
+  const balance = await getBalance(user.id)
+  if (balance < cost) {
+    return NextResponse.json(
+      { error: `Not enough tokens — chat edits cost ${cost} tokens. Top up to continue.` },
+      { status: 402 }
+    )
+  }
+
+  await spendTokens(user.id, cost, `Chat edit: ${website.name}`, { websiteId: id })
 
   const history = await prisma.chatMessage.findMany({
     where:   { websiteId: id },
