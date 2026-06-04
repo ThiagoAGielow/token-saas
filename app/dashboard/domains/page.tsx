@@ -45,4 +45,3 @@ export default async function DomainsPage() {
 
   return <DomainsClient initialSites={sites} initialDomains={domains} />
 }
-

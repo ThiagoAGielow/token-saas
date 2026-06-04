@@ -12,6 +12,7 @@ import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getOrCreateUser } from '@/lib/user'
+import { removeDomainFromProject } from '@/lib/vercel'
 import { randomBytes } from 'crypto'
 
 function generateVerificationToken(): string {
@@ -29,6 +30,7 @@ function sanitizeDomain(raw: string): string {
 
 interface CreateDomainBody {
   domain?: unknown
+  websiteId?: string
 }
 
 // ─── GET ─────────────────────────────────────────────────────────────────────
@@ -68,8 +70,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     const { userId: clerkId } = await auth()
     if (!clerkId) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
-    const body = (await request.json().catch(() => ({}))) as CreateDomainBody
-    const raw  = body.domain
+    const body      = (await request.json().catch(() => ({}))) as CreateDomainBody
+    const raw       = body.domain
+    const websiteId = typeof body.websiteId === 'string' ? body.websiteId : undefined
 
     if (!raw || typeof raw !== 'string') {
       return NextResponse.json({ error: 'domain is required' }, { status: 400 })
@@ -89,12 +92,19 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const user = await getOrCreateUser(clerkId)
 
+    // Validate websiteId belongs to this user if provided
+    if (websiteId) {
+      const website = await prisma.website.findFirst({ where: { id: websiteId, userId: user.id }, select: { id: true } })
+      if (!website) return NextResponse.json({ error: 'Website not found' }, { status: 404 })
+    }
+
     const record = await prisma.domain.create({
       data: {
         userId:            user.id,
         domain,
         verified:          false,
         verificationToken: generateVerificationToken(),
+        ...(websiteId ? { websiteId } : {}),
       },
       select: {
         id:                true,
@@ -125,10 +135,24 @@ export async function DELETE(request: Request): Promise<NextResponse> {
 
     const user = await getOrCreateUser(clerkId)
 
-    const domain = await prisma.domain.findFirst({ where: { id, userId: user.id } })
+    const domain = await prisma.domain.findFirst({
+      where:  { id, userId: user.id },
+      include: { website: { select: { vercelProjectId: true } } },
+    })
     if (!domain) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     await prisma.domain.delete({ where: { id } })
+
+    // Best-effort Vercel cleanup — don't block deletion if this fails
+    const projectId = domain.website?.vercelProjectId
+    if (projectId && domain.verified) {
+      try {
+        await Promise.allSettled([
+          removeDomainFromProject(projectId, domain.domain),
+          removeDomainFromProject(projectId, `www.${domain.domain}`),
+        ])
+      } catch { /* non-fatal */ }
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

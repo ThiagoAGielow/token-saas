@@ -10,6 +10,7 @@ import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getOrCreateUser } from '@/lib/user'
+import { addDomainToProject } from '@/lib/vercel'
 
 interface DohAnswer {
   type: number
@@ -49,7 +50,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     const user = await getOrCreateUser(clerkId)
 
     const domain = await prisma.domain.findFirst({
-      where: { id, userId: user.id },
+      where:   { id, userId: user.id },
+      include: { website: { select: { vercelProjectId: true } } },
     })
 
     if (!domain) return NextResponse.json({ error: 'Domain not found' }, { status: 404 })
@@ -75,6 +77,17 @@ export async function POST(request: Request): Promise<NextResponse> {
       data:  { verified: true, verifiedAt: new Date() },
       select: { id: true, domain: true, verified: true, verifiedAt: true },
     })
+
+    // Add both root and www to the linked Vercel project (best-effort)
+    const projectId = domain.website?.vercelProjectId
+    if (projectId) {
+      try {
+        await Promise.allSettled([
+          addDomainToProject(projectId, domain.domain),
+          addDomainToProject(projectId, `www.${domain.domain}`),
+        ])
+      } catch { /* non-fatal — domain is verified in DB regardless */ }
+    }
 
     return NextResponse.json({ verified: true, domain: updated })
   } catch (error) {

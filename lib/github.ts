@@ -79,6 +79,21 @@ export async function provisionSiteRepo({
   }
 }
 
+/**
+ * Adds a GitHub user as a collaborator (maintain permission) on a site repo.
+ */
+export async function addCollaborator(repoName: string, username: string): Promise<void> {
+  const octokit = getOctokit()
+  const org     = getOrg()
+
+  await octokit.repos.addCollaborator({
+    owner:      org,
+    repo:       repoName,
+    username,
+    permission: 'maintain',
+  })
+}
+
 export interface UpdateSiteHtmlOptions {
   repoName: string
   html: string

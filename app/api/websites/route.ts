@@ -19,7 +19,7 @@ import { createVercelProject } from '@/lib/vercel'
 
 const SUBDOMAIN_RE = /^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/
 
-const WEBSITE_SYSTEM_PROMPT = `You are an expert web designer and developer.
+const WEBSITE_SYSTEM_PROMPT_BASE = `You are an expert web designer and developer.
 Generate a complete, self-contained HTML file for a website based on the user's description.
 
 Rules:
@@ -34,11 +34,26 @@ Rules:
 - Add a simple footer with the business name
 - Do NOT include any JavaScript beyond what Tailwind CDN provides`
 
+const TEMPLATE_STYLES: Record<string, string> = {
+  trades:       'Bold, high-contrast site for trades/construction businesses. Dark backgrounds with strong orange or yellow accent colors. Large hero with a compelling headline and a "Get a Free Quote" CTA. Services grid with icons. Trust signals (licensed, insured, years of experience). Phone number prominent in the header and footer.',
+  restaurant:   'Warm, elegant restaurant site. Dark background with amber/gold accents. Full-width hero with atmospheric food/dining imagery. Menu section with categories and descriptions. Reservation CTA. A story or chef section. Footer with opening hours and address.',
+  wellness:     'Clean, calming wellness or health site. Light or soft-neutral backgrounds with green or teal accents. Gentle, flowing typography. Services offered with icons. Testimonials section. Booking or contact CTA. Peaceful, minimal aesthetic.',
+  professional: 'Clean corporate/professional services site. White or light-gray background with navy blue accents. Formal typography. About/team section with headshot placeholder. Services list. Client logos section. Contact form.',
+  portfolio:    'Creative portfolio site. Dark background with a vibrant accent color (purple, pink, or coral). Projects/work grid with hover effects. Bio/about section. Skills or tools list. Minimal but striking typography. Contact section.',
+  startup:      'Modern SaaS/startup landing page. Dark background with gradient accents (purple-to-blue or cyan-to-blue). Bold hero headline and subheadline with a primary CTA button. Features grid (3 columns with icons). Pricing table with 3 tiers. Testimonials row. Strong closing CTA section.',
+}
+
+function buildSystemPrompt(templateId?: string): string {
+  if (!templateId || !TEMPLATE_STYLES[templateId]) return WEBSITE_SYSTEM_PROMPT_BASE
+  return `${WEBSITE_SYSTEM_PROMPT_BASE}\n\nDesign style to follow (template: ${templateId}):\n${TEMPLATE_STYLES[templateId]}`
+}
+
 interface CreateWebsiteBody {
   name?: string
   subdomain?: string
   prompt?: string
   provider?: AIProvider
+  templateId?: string
 }
 
 // ─── GET /api/websites ────────────────────────────────────────────────────────
@@ -88,7 +103,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (!clerkId) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
     const body = (await request.json()) as CreateWebsiteBody
-    const { name, subdomain, prompt, provider = 'claude' } = body
+    const { name, subdomain, prompt, provider = 'claude', templateId } = body
 
     if (!name?.trim())      return NextResponse.json({ error: 'Name is required' }, { status: 400 })
     if (!subdomain?.trim()) return NextResponse.json({ error: 'Subdomain is required' }, { status: 400 })
@@ -144,7 +159,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       generatedHtml = await callAI({
         userId:   user.id,
         provider,
-        system:   WEBSITE_SYSTEM_PROMPT,
+        system:   buildSystemPrompt(templateId),
         messages: [{ role: 'user', content: prompt.trim() }],
         maxTokens: 8192,
       })
