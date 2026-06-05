@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 const PROVIDERS: ReadonlyArray<{
   id: 'claude' | 'openai' | 'gemini';
@@ -57,6 +57,18 @@ interface ConnectedKey {
   id: string;
   provider: string;
   keyHint: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ORKey {
+  id: string;
+  keyHint: string;
+  name: string;
+  limitUsd: number | null;
+  usedUsd: number;
+  isActive: boolean;
+  lastSyncAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -243,6 +255,164 @@ function ProviderCard({ provider, connectedKey, onSave, onDelete }: ProviderCard
   );
 }
 
+function formatTimeAgo(iso: string | null): string {
+  if (!iso) return 'Never';
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins  = Math.floor(diff / 60_000);
+  const hours = Math.floor(diff / 3_600_000);
+  const days  = Math.floor(diff / 86_400_000);
+  if (mins < 1)    return 'Just now';
+  if (mins < 60)   return `${mins}m ago`;
+  if (hours < 24)  return `${hours}h ago`;
+  return `${days}d ago`;
+}
+
+function OpenRouterSection() {
+  const [orKey, setOrKey]           = useState<ORKey | null | undefined>(undefined);
+  const [syncing, setSyncing]       = useState(false);
+  const [provisioning, setProvisioning] = useState(false);
+  const [error, setError]           = useState<string | null>(null);
+
+  const fetchKey = useCallback(async () => {
+    try {
+      const res  = await fetch('/api/openrouter-keys');
+      const data = await res.json() as { key?: ORKey | null };
+      setOrKey(data.key ?? null);
+    } catch {
+      setOrKey(null);
+    }
+  }, []);
+
+  useEffect(() => { void fetchKey(); }, [fetchKey]);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setError(null);
+    try {
+      const res  = await fetch('/api/openrouter-keys/sync', { method: 'POST' });
+      const data = await res.json() as { key?: ORKey; error?: string };
+      if (!res.ok) throw new Error(data.error || 'Sync failed');
+      setOrKey(data.key ?? null);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleProvision = async () => {
+    setProvisioning(true);
+    setError(null);
+    try {
+      const res  = await fetch('/api/openrouter-keys/provision', { method: 'POST' });
+      const data = await res.json() as { key?: ORKey; error?: string };
+      if (!res.ok) throw new Error(data.error || 'Provisioning failed');
+      setOrKey(data.key ?? null);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setProvisioning(false);
+    }
+  };
+
+  const isLoading = orKey === undefined;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className="text-lg font-bold text-white">OpenRouter AI</h2>
+          <p className="text-sm text-gray-400 mt-0.5">
+            Your dedicated AI sub-key — provisioned automatically on signup.
+          </p>
+        </div>
+        {orKey?.isActive && (
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 transition-all disabled:opacity-40"
+          >
+            {syncing ? 'Syncing…' : 'Sync usage'}
+          </button>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-white/10 bg-[#111] overflow-hidden">
+        {isLoading ? (
+          <div className="px-5 py-4 text-sm text-gray-500">Loading…</div>
+        ) : orKey?.isActive ? (
+          <div className="px-5 py-4 space-y-3">
+            {/* Status row */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
+                <span className="text-sm font-semibold text-white">Active</span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/25 font-medium">
+                  ···{orKey.keyHint}
+                </span>
+              </div>
+              <span className="text-xs text-gray-500">
+                Synced: {formatTimeAgo(orKey.lastSyncAt)}
+              </span>
+            </div>
+
+            {/* Usage row */}
+            <div className="flex items-center gap-6 text-sm">
+              <div>
+                <span className="text-gray-500 text-xs uppercase tracking-wider">Used</span>
+                <p className="text-white font-mono font-semibold mt-0.5">
+                  ${orKey.usedUsd.toFixed(4)}
+                </p>
+              </div>
+              <div>
+                <span className="text-gray-500 text-xs uppercase tracking-wider">Limit</span>
+                <p className="text-white font-mono font-semibold mt-0.5">
+                  {orKey.limitUsd != null ? `$${orKey.limitUsd.toFixed(2)}` : 'Unlimited'}
+                </p>
+              </div>
+            </div>
+
+            {/* Progress bar — only shown when a limit is set */}
+            {orKey.limitUsd != null && orKey.limitUsd > 0 && (
+              <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-purple-500 transition-all"
+                  style={{ width: `${Math.min((orKey.usedUsd / orKey.limitUsd) * 100, 100)}%` }}
+                />
+              </div>
+            )}
+
+            <p className="text-xs text-gray-600">
+              All your AI calls on VelocitySites use this key. Usage is billed directly to the VelocitySites platform account.
+            </p>
+          </div>
+        ) : (
+          <div className="px-5 py-5 flex items-start gap-4">
+            <span className="w-2 h-2 rounded-full bg-gray-600 flex-shrink-0 mt-1.5" />
+            <div className="flex-1">
+              <p className="text-sm text-white font-semibold">Not provisioned</p>
+              <p className="text-xs text-gray-500 mt-1 mb-3">
+                Your AI key wasn&apos;t created at signup. Click below to activate it now.
+              </p>
+              <button
+                onClick={handleProvision}
+                disabled={provisioning}
+                className="text-sm px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-semibold transition-all disabled:opacity-40"
+              >
+                {provisioning ? 'Activating…' : 'Activate AI Key'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <p className="text-xs text-red-400 mt-2">{error}</p>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const [connectedKeys, setConnectedKeys] = useState<Record<string, ConnectedKey>>({});
   const [loading, setLoading] = useState(true);
@@ -324,11 +494,16 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-2xl space-y-6">
+      {/* OpenRouter provisioned key */}
+      <OpenRouterSection />
+
+      <div className="border-t border-white/10 pt-6" />
+
       {/* Header */}
       <div>
-        <h2 className="text-lg font-bold text-white">AI Provider Keys</h2>
+        <h2 className="text-lg font-bold text-white">BYOK — Bring Your Own Key</h2>
         <p className="text-sm text-gray-400 mt-0.5">
-          Connect your own API keys. TokenFlow uses them to power AI features — you pay your provider directly.
+          Optionally connect your own AI provider keys. VelocitySites will use them instead of the shared platform key.
         </p>
       </div>
 
