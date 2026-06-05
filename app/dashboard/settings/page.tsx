@@ -546,7 +546,7 @@ export default function SettingsPage() {
         <div className="text-sm">
           <p className="text-blue-400 font-semibold mb-0.5">How BYOK works</p>
           <p className="text-gray-400">
-            Your API key is encrypted with AES-256-GCM before being stored. It is only decrypted server-side at the moment an AI call is made on your behalf. TokenFlow never stores keys in plaintext or logs them.
+            Your API key is encrypted with AES-256-GCM before being stored. It is only decrypted server-side at the moment an AI call is made on your behalf. VelocitySites never stores keys in plaintext or logs them.
           </p>
         </div>
       </div>
