@@ -75,6 +75,13 @@ export default function WebsiteChatPage({ params }: { params: Promise<{ id: stri
   const [streamingText, setStreamingText] = useState('');
   const [regenStreamText, setRegenStreamText] = useState('');
 
+  type RightTab = 'preview' | 'code';
+  const [rightTab,   setRightTab]   = useState<RightTab>('preview');
+  const [codeValue,  setCodeValue]  = useState('');
+  const [codeDirty,  setCodeDirty]  = useState(false);
+  const [codeSaving, setCodeSaving] = useState(false);
+  const codeDirtyRef                = useRef(false);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Split-pane preview state
@@ -168,6 +175,51 @@ export default function WebsiteChatPage({ params }: { params: Promise<{ id: stri
     }
   }
 
+  // ── Code editor ────────────────────────────────────────────────────────────
+  async function handleSaveCode() {
+    if (!codeDirty || codeSaving) return;
+    setCodeSaving(true);
+    try {
+      const res = await fetch(`/api/websites/${id}/html`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'text/html' },
+        body:    codeValue,
+      });
+      if (!res.ok) throw new Error('Save failed');
+      setPreviewHtml(codeValue);
+      setPreviewKey(k => k + 1);
+      codeDirtyRef.current = false;
+      setCodeDirty(false);
+    } catch (err) {
+      console.error('[handleSaveCode]', err);
+    } finally {
+      setCodeSaving(false);
+    }
+  }
+
+  function handleDiscardCode() {
+    setCodeValue(previewHtml);
+    codeDirtyRef.current = false;
+    setCodeDirty(false);
+  }
+
+  function handleCodeChange(val: string) {
+    setCodeValue(val);
+    codeDirtyRef.current = true;
+    setCodeDirty(true);
+  }
+
+  function handleCodeKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key !== 'Tab') return;
+    e.preventDefault();
+    const el    = e.currentTarget;
+    const start = el.selectionStart;
+    const end   = el.selectionEnd;
+    const next  = codeValue.slice(0, start) + '  ' + codeValue.slice(end);
+    handleCodeChange(next);
+    requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = start + 2; });
+  }
+
   // ── Load history ───────────────────────────────────────────────────────────
   const loadChat = useCallback(async () => {
     setLoading(true);
@@ -190,6 +242,11 @@ export default function WebsiteChatPage({ params }: { params: Promise<{ id: stri
   }, [id]);
 
   useEffect(() => { loadChat(); }, [loadChat]);
+
+  // Sync code editor when AI updates the preview — only if no unsaved local edits
+  useEffect(() => {
+    if (!codeDirtyRef.current) setCodeValue(previewHtml);
+  }, [previewHtml]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -559,28 +616,104 @@ export default function WebsiteChatPage({ params }: { params: Promise<{ id: stri
           </form>
         </div>
 
-        {/* Right: live preview */}
+        {/* Right: preview + code editor */}
         <div className="flex-1 min-w-0 flex flex-col bg-[#141414]">
-          <div className="flex-1 flex items-start justify-center overflow-auto p-4">
-            {previewHtml ? (
-              <iframe key={previewKey} srcDoc={previewHtml} title="Site preview"
-                sandbox="allow-scripts allow-same-origin"
-                style={{ width: VIEWPORT_WIDTHS[viewport], maxWidth: '100%', height: '100%', minHeight: '600px' }}
-                className="rounded-lg border border-white/10 bg-white transition-all duration-300" />
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center">
-                  <svg className="w-8 h-8 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+
+          {/* Tab bar */}
+          <div className="shrink-0 h-9 flex items-center px-3 border-b border-white/10 bg-[#111] gap-1">
+            {(['preview', 'code'] as RightTab[]).map(tab => (
+              <button key={tab} onClick={() => setRightTab(tab)}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                  rightTab === tab ? 'bg-white/15 text-white' : 'text-gray-500 hover:text-gray-300'
+                }`}>
+                {tab === 'preview' ? (
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                   </svg>
-                </div>
-                <div>
-                  <p className="text-gray-500 font-medium text-sm">No preview yet</p>
-                  <p className="text-gray-600 text-xs mt-1">Ask the AI to create or update your site to see a live preview here.</p>
-                </div>
-              </div>
+                ) : (
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                  </svg>
+                )}
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab === 'code' && codeDirty && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                )}
+              </button>
+            ))}
+
+            {rightTab === 'code' && (
+              <>
+                {codeDirty && (
+                  <span className="text-[10px] text-amber-400 font-medium ml-1">Modified</span>
+                )}
+                <div className="flex-1" />
+                {codeDirty && (
+                  <button onClick={handleDiscardCode}
+                    className="text-xs px-2.5 py-1 rounded-md text-gray-500 hover:text-gray-300 transition-colors">
+                    Discard
+                  </button>
+                )}
+                <button
+                  onClick={() => void navigator.clipboard.writeText(codeValue)}
+                  className="text-xs px-2.5 py-1 rounded-md text-gray-500 hover:text-gray-300 transition-colors">
+                  Copy
+                </button>
+                <button onClick={handleSaveCode} disabled={!codeDirty || codeSaving}
+                  className="ml-1 text-xs px-3 py-1 rounded-md bg-blue-500 hover:bg-blue-400 text-white font-medium transition-colors disabled:opacity-40">
+                  {codeSaving ? 'Saving…' : 'Save'}
+                </button>
+              </>
             )}
           </div>
+
+          {/* Preview pane */}
+          {rightTab === 'preview' && (
+            <div className="flex-1 flex items-start justify-center overflow-auto p-4">
+              {previewHtml ? (
+                <iframe key={previewKey} srcDoc={previewHtml} title="Site preview"
+                  sandbox="allow-scripts allow-same-origin"
+                  style={{ width: VIEWPORT_WIDTHS[viewport], maxWidth: '100%', height: '100%', minHeight: '600px' }}
+                  className="rounded-lg border border-white/10 bg-white transition-all duration-300" />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center">
+                    <svg className="w-8 h-8 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 font-medium text-sm">No preview yet</p>
+                    <p className="text-gray-600 text-xs mt-1">Ask the AI to create or update your site to see a live preview here.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Code editor pane */}
+          {rightTab === 'code' && (
+            <div className="flex-1 flex flex-col min-h-0">
+              <textarea
+                value={codeValue}
+                onChange={e => handleCodeChange(e.target.value)}
+                onKeyDown={handleCodeKeyDown}
+                spellCheck={false}
+                placeholder="No HTML yet — chat with the AI to generate your site."
+                className="flex-1 w-full bg-[#0a0a0a] text-gray-300 font-mono text-xs leading-5 resize-none focus:outline-none p-4 overflow-auto"
+                style={{ tabSize: 2, whiteSpace: 'pre' }}
+              />
+              <div className="shrink-0 px-4 py-1.5 border-t border-white/5 bg-[#0d0d0d] flex items-center gap-4 text-[10px] text-gray-600 select-none">
+                <span>{codeValue.split('\n').length.toLocaleString()} lines</span>
+                <span>{codeValue.length.toLocaleString()} chars</span>
+                {codeDirty && (
+                  <span className="text-amber-500">● Unsaved changes — press Save to apply</span>
+                )}
+              </div>
+            </div>
+          )}
+
         </div>
 
       </div>
