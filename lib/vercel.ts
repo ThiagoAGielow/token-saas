@@ -85,12 +85,9 @@ export async function createVercelProject({
     }),
   })
 
-  const projectId = project.id
-
-  await new Promise((r) => setTimeout(r, 3000))
-  const vercelUrl = await getProductionUrl(projectId)
-
-  return { projectId, vercelUrl }
+  // Return immediately — first deploy is triggered by the GitHub push.
+  // vercelUrl will be populated later via the deployment-status polling endpoint.
+  return { projectId: project.id, vercelUrl: null }
 }
 
 /**
