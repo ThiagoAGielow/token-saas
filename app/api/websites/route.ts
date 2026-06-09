@@ -177,22 +177,40 @@ export async function POST(request: Request): Promise<NextResponse> {
       )
     }
 
-    let githubRepo: string | null = null
-    let githubRepoUrl: string | null = null
+    // Run GitHub + Vercel provisioning in parallel — both are slow API calls.
+    // Repo name is deterministic so Vercel can reference it without waiting for GitHub.
+    const predictedRepoName = `client-${cleanSubdomain}`
 
-    try {
-      const { repoName, repoUrl } = await provisionClientRepo({
+    const [githubResult, vercelResult] = await Promise.allSettled([
+      provisionClientRepo({
         clientName: name.trim(),
-        subdomain: cleanSubdomain,
-        tier: 'static',
+        subdomain:  cleanSubdomain,
+        tier:       'static',
         generatedHtml,
-      })
-      
-      githubRepo = repoName
-      githubRepoUrl = repoUrl
-    } catch (ghErr) {
-      console.error('[POST /api/websites] GitHub provisioning failed:', ghErr)
-      // Continue without GitHub - can retry later
+      }),
+      createVercelProject({
+        repoName: predictedRepoName,
+        siteName: name.trim(),
+      }),
+    ])
+
+    let githubRepo:      string | null = null
+    let githubRepoUrl:   string | null = null
+    let vercelProjectId: string | null = null
+    let vercelUrl:       string | null = null
+
+    if (githubResult.status === 'fulfilled') {
+      githubRepo    = githubResult.value.repoName
+      githubRepoUrl = githubResult.value.repoUrl
+    } else {
+      console.error('[POST /api/websites] GitHub provisioning failed:', githubResult.reason)
+    }
+
+    if (vercelResult.status === 'fulfilled') {
+      vercelProjectId = vercelResult.value.projectId
+      vercelUrl       = vercelResult.value.vercelUrl
+    } else {
+      console.error('[POST /api/websites] Vercel provisioning failed:', vercelResult.reason)
     }
 
     const updated = await prisma.website.update({
@@ -201,6 +219,8 @@ export async function POST(request: Request): Promise<NextResponse> {
         generatedHtml,
         githubRepo,
         githubRepoUrl,
+        vercelProjectId,
+        vercelUrl,
         status: WebsiteStatus.ACTIVE,
         publishedAt: new Date(),
       },
